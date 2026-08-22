@@ -23,7 +23,7 @@
 #      tagging), reuse it and bump only the build number: a second build of
 #      the same release is leaving the machine.
 #   3. deploy: tools/deploy-device.sh [udid]
-#   4. tag vX.Y.0 (annotated); 5. git push --follow-tags
+#   4. tag X.Y.0 (BARE — no v) (annotated); 5. git push --follow-tags
 #   A failed deploy stops everything — never tag around one.
 set -e
 cd "$(dirname "$0")/.."
@@ -96,7 +96,7 @@ for N in "$BUILD:ios.buildNumber" "$VCODE:android.versionCode"; do
     ''|*[!0-9]*) echo "refusing: ${N#*:} is '${N%%:*}' — this lane needs a plain integer" >&2; exit 1 ;;
   esac
 done
-if git rev-parse -q --verify "refs/tags/v$CUR" >/dev/null; then
+if git rev-parse -q --verify "refs/tags/$CUR" >/dev/null; then
   NEW=$(echo "$CUR" | awk -F. '{printf "%d.%d.0", $1, $2+1}')
   NEWBUILD=1
   NEWCODE=1
@@ -108,10 +108,10 @@ else
   echo "==> version: $CUR is still untagged from an earlier run — reusing it; build $BUILD -> $NEWBUILD"
 fi
 
-# A leftover v$NEW would make `git tag -a` fail AFTER the deploy has already
+# A leftover $NEW would make `git tag -a` fail AFTER the deploy has already
 # shipped. Checked HERE, while nothing has been touched yet.
-if git rev-parse -q --verify "refs/tags/v$NEW" >/dev/null; then
-  echo "refusing: the tag v$NEW already exists — nothing has shipped yet." >&2
+if git rev-parse -q --verify "refs/tags/$NEW" >/dev/null; then
+  echo "refusing: the tag $NEW already exists — nothing has shipped yet." >&2
   echo "  It is the residue of an interrupted lane: look at it, then delete it" >&2
   echo "  or move the version on." >&2
   exit 1
@@ -156,7 +156,7 @@ fi
 sh tools/deploy-device.sh $UDID
 
 # ----------------------------------------------------------------- tag and push
-git tag -a "v$NEW" -m "MyCalMind $NEW"
+git tag -a "$NEW" -m "MyCalMind $NEW"
 # --atomic, because `git push --follow-tags` is per-ref: when origin/main has
 # moved under a long deploy, the TAG lands on the remote while main is
 # REJECTED — a published tag for a commit nobody can fetch. Both or neither.
@@ -165,10 +165,10 @@ git tag -a "v$NEW" -m "MyCalMind $NEW"
 # then still untagged, so a re-run REUSES it — which is right, because the
 # deploy above already shipped exactly these bytes under that number.
 if ! git push --atomic --follow-tags origin main; then
-  git tag -d "v$NEW" >/dev/null
+  git tag -d "$NEW" >/dev/null
   echo "" >&2
   echo "THE DEPLOY SHIPPED, but the push was rejected — so nothing was tagged." >&2
   echo "  main has moved on the remote. Pull, then re-run: the lane reuses ${NEW}." >&2
   exit 1
 fi
-echo "==> dtp done: v$NEW (build $NEWBUILD) is on the phone and pushed"
+echo "==> dtp done: $NEW (build $NEWBUILD) is on the phone and pushed"

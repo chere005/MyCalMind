@@ -45,7 +45,7 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   number is how two installs are told apart (AcctMind's lesson). A failed
   deploy stops the lane; a re-run reuses the still-untagged version and bumps
   only the build number. (The old rule "CalMind-Local is not tagged" was
-  about sharing CalMind's tag namespace — in its own repo, its own `vx.y.0`
+  about sharing CalMind's tag namespace — in its own repo, its own bare `x.y.0`
   tags are the point.)
 - **`main` is the branch.** Stage explicit paths — never `git add -A`.
 
