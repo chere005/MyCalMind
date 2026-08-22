@@ -41,7 +41,8 @@
     },
     "plugins": [
       "@bacons/apple-targets",
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/withMacCatalyst.js"
     ]
   }
 }

@@ -76,20 +76,39 @@ device is the only copy of its data. As of 2026-08-22:
   `xcrun devicectl device install app --device <watch-udid>
   …/Watch/CalMindWatch.app` (see "Running it" in `README.md`), proven
   building 2026-08-22, but nothing is installed to a paired watch right now.
-- **macOS — builds, but for a different reason than iOS.** There is no
-  Tauri desktop shell here. The Mac path is the iOS binary run as "My Mac
-  (Designed for iPad)" — the only route a free Apple developer team allows
-  for an iOS-only codebase — and that build is permanently unlaunchable
-  from a shell or Finder (`incorrect executable format`: it's an
-  iOS-platform Mach-O, and macOS's loader refuses it however it's invoked
-  outside Xcode). Running it is an Xcode GUI action only: open the
-  workspace, Product > Destination > My Mac (Designed for iPad) > Run. A
-  true double-clickable Mac app needs Mac Catalyst —
-  `app/ios/Podfile`'s `react_native_post_install` has
-  `:mac_catalyst_enabled => false` right now. That's the identified fix,
-  not yet attempted, deliberately deferred as its own scoped effort (the
-  real unknown is whether the Expo/RN native modules carry
-  Catalyst-compatible slices).
+- **macOS — a real Mac Catalyst app, installed at `/Applications/MyCalMind.app`.**
+  Proven working 2026-08-22, after a long chase: `app/plugins/withMacCatalyst.js`
+  (an Expo config plugin, committed, survives every `prebuild`) flips the
+  Podfile's `mac_catalyst_enabled`, enables `SUPPORTS_MACCATALYST` on the main
+  app AND the widget target (NOT the watchOS-SDK targets, which can't run
+  under Catalyst — `platformFilter = ios` on the "Embed Watch Content" build
+  file excludes `CalMindWatch.app` from the Catalyst product, matching
+  Xcode's own suggested fix for "built for macOS but contains embedded
+  content built for watchOS"). Build arm64-only —
+  `ExpoModulesCore.xcframework` ships no x86_64 Catalyst slice at all
+  (Info.plist has only `ios-arm64` and `ios-arm64_x86_64-simulator`), so
+  x86_64 is a real, permanent gap in this Expo SDK version, not a bug here.
+  Expo modules and React Native's own core must build **from source**, not
+  from their prebuilt XCFrameworks — `EXPO_USE_PRECOMPILED_MODULES=0
+  RCT_USE_PREBUILT_RNCORE=0` before `expo prebuild` — because those
+  XCFrameworks' generated CocoaPods copy scripts have no `maccatalyst` case
+  at all when the framework wasn't packaged with one.
+  **Not yet durable:** `ReactNativeDependencies.xcframework` (React Native's
+  third-party C++ deps — folly/glog/boost) has NO source-build option and
+  IS packaged with a maccatalyst slice, but that slice's bundle is
+  malformed (duplicate real content instead of a proper
+  `Versions/Current` symlink structure, plus three privacy-manifest-only
+  resource bundles that need to live under `Versions/A` too, not the
+  bundle root) — codesign refuses it as shipped. The repair currently lives
+  as hand-appended shell logic on the "`[CP-User] [RNDeps] Replace React
+  Native Dependencies…`" script phase in the GENERATED
+  `ios/Pods/Pods.xcodeproj` (`alwaysOutOfDate`, re-extracts the pristine
+  broken bundle on every single build, which is why this needs to be
+  patched into that exact phase rather than just fixed once beforehand).
+  It does not survive a fresh `pod install`/`prebuild` yet — ask Sean before
+  automating this into `bin/build-platforms.sh`'s catalyst path, since it
+  means always forcing both apps' dependencies to build from source (slower)
+  and shell-patching a CocoaPods-generated file on every run.
 - **Android — builds, installs, and launches.** `com.seancheren.calmindlocal`,
   confirmed working on a local emulator 2026-08-22.
 - **Web — none, deliberately.** No server means nothing to build a web
