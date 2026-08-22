@@ -72,7 +72,7 @@ export async function fetchRecipeHtml(input: string): Promise<string> {
    */
   if (res.url) {
     const final = checkFetchUrl(res.url);
-    if (!final.ok) throw new Error(`that link redirects somewhere CalMind Local will not follow — ${final.why}`);
+    if (!final.ok) throw new Error(`that link redirects somewhere MyCalMind will not follow — ${final.why}`);
   }
 
   if (!res.ok) {

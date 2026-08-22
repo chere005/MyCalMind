@@ -100,7 +100,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
                 {peerState.state === 'blocked' || peerState.state === 'failed'
                   ? peerState.detail
                   : peers.length === 0
-                    ? `No other device found yet (${peerState.state}${peerState.detail ? ': ' + peerState.detail : ''}). Open CalMind Local on your Mac and give it this same phrase.`
+                    ? `No other device found yet (${peerState.state}${peerState.detail ? ': ' + peerState.detail : ''}). Open MyCalMind on your Mac and give it this same phrase.`
                     : peers.map((p) => p.name).join(', ')}
               </Text>
               {/* The phrase is the whole of the link's security: a device that

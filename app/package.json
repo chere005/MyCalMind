@@ -1,5 +1,5 @@
 {
-  "name": "calmind-local-app",
+  "name": "mycalmind-app",
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {

@@ -135,7 +135,7 @@ export function RecipeEditor({ note, onClose }: { note: Rec<'note'>; onClose: ()
    * ingredients, exact steps, no chatter to strip. Sean's rule holds for both
    * paths: ingredients and steps ONLY.
    *
-   * This is the ONE thing in CalMind-Local that leaves the device, and it
+   * This is the ONE thing in MyCalMind that leaves the device, and it
    * reads — the page comes in, nothing goes out but the URL he pasted.
    */
   const importUrl = async () => {

@@ -23,7 +23,7 @@
 module.exports = {
   type: 'widget',
   name: 'CalMindWidget',
-  displayName: 'CalMind Local',
+  displayName: 'MyCalMind',
   bundleIdentifier: 'com.seancheren.calmindlocal.appwidget',
   deploymentTarget: '17.0',
   entitlements: {

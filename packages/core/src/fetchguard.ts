@@ -1,5 +1,5 @@
 /**
- * Which URLs this app will fetch — the one place CalMind-Local reaches outside
+ * Which URLs this app will fetch — the one place MyCalMind reaches outside
  * itself.
  *
  * The whole app is local: its data lives on the device and moves only to
@@ -60,7 +60,7 @@ export function checkFetchUrl(input: string): UrlCheck {
   // (2026-08-21): a dropped keystroke left the link starting mid-word, the
   // host came out as one label, and 'that address is on this network' read as
   // the guard being broken rather than the link being wrong.
-  if (!isPublicHost(host)) return { ok: false, why: `${host} is this device or this network — CalMind Local will not fetch it` };
+  if (!isPublicHost(host)) return { ok: false, why: `${host} is this device or this network — MyCalMind will not fetch it` };
   return { ok: true, url, host };
 }
 

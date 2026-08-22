@@ -12,7 +12,7 @@
 module.exports = {
   type: 'watch-widget',
   name: 'CalMindComplication',
-  displayName: 'CalMind Local',
+  displayName: 'MyCalMind',
   // A widget extension's id must extend its HOST app's — the watch app, not
   // the phone app. The default (root id + name) would parent it wrongly.
   bundleIdentifier: 'com.seancheren.calmindlocal.watchkitapp.widget',

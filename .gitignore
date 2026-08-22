@@ -6,3 +6,11 @@ app/dist/
 node_modules/
 *.log
 .DS_Store
+test-results/
+
+# The device-build DerivedData lives inside app/ios (already ignored above),
+# but the rule is worth stating: app/ios/derived-dtp is deploy-device.sh's.
+
+# Claude Code machine-local state; launch.json is repo config and IS tracked
+.claude/*
+!.claude/launch.json

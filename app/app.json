@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "CalMind Local",
-    "slug": "calmind-local",
+    "name": "MyCalMind",
+    "slug": "mycalmind",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,7 +18,7 @@
       },
       "buildNumber": "3",
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "CalMind Local mirrors your reminders, notes and calendar between your own devices over your local network. Nothing is ever sent to a server.",
+        "NSLocalNetworkUsageDescription": "MyCalMind mirrors your reminders, notes and calendar between your own devices over your local network. Nothing is ever sent to a server.",
         "NSBonjourServices": [
           "_calmind-local._tcp"
         ]

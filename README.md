@@ -1,18 +1,31 @@
-# CalMind-Local
+# MyCalMind
 
-CalMind with the server taken out.
+CalMind with the server taken out. Its own repo since 2026-08-22 — extracted
+from [chere005/CalMind](https://github.com/chere005/CalMind) with its history,
+where it lived as `CalMind-Local`, and renamed. The rename is display-deep
+only: the bundle ids, App Group, Bonjour service and every persisted key keep
+their `calmindlocal` spellings, because those ARE the installed app's identity
+and its data (`AGENTS.md` has the full list).
 
-It is not a rewrite and not a lookalike — it is the app from `apps/` and
-`packages/core`, copied whole and then gutted of everything that needed a
-server. Every screen, every gesture, every rule is the one upstream ships,
-because it is literally the same code.
+**Platforms:** iOS and watchOS (SwiftUI watch app, watch-face complication,
+home-screen widget), entirely local — no server, no accounts; devices mirror
+each other over Bonjour on the local network. The Mac runs the iOS binary as
+"My Mac (Designed for iPad)". There is no web instance, deliberately.
+
+It is not a rewrite and not a lookalike — it is the app from CalMind's
+`apps/app` and `packages/core`, copied whole and then gutted of everything
+that needed a server. Every screen, every gesture, every rule is the one
+upstream ships, because it is literally the same code.
 
 ```
-app/            The Expo app, cloned from apps/app — screens, gestures,
-                styling, the native watch/complication/widget targets.
+app/            The Expo app, cloned from CalMind's apps/app — screens,
+                gestures, styling, the native watch/complication/widget
+                targets.
 packages/core/  The brain, cloned verbatim minus the two modules that only
                 existed to talk to a server.
 spec/           The behaviour contract, copied so core's suite runs here.
+tools/          deploy-device.sh (the phone IS production) and the dtp/tdtp
+                release lanes.
 ```
 
 ## What was taken out, and why
@@ -83,7 +96,7 @@ quoting the number at him.
 Its own bundle ids (`com.seancheren.calmindlocal…`), its own App Group
 (`group.com.seancheren.calmindlocal`), its own storage key — so it sits beside
 the real CalMind on the same phone and wrist and shares nothing with it. The
-watch app and the widgets say **CalMind Local**, because two identical icons is
+watch app and the widgets say **MyCalMind**, because two identical icons is
 a trap. The icon is CalMind's own.
 
 ## Running it
@@ -107,9 +120,20 @@ xcrun devicectl device install app --device <watch-udid> <CalMindLocal.app>/Watc
 ```
 
 **A Debug build is not self-contained.** It loads its bundle from Metro on
-:8081 — and if the parent repo's Metro is running there, your Debug build
+:8081 — and if the CalMind repo's Metro is running there, your Debug build
 silently gets *that* app, login screen and all. Build Release to look at this
 one.
+
+## Releasing it
+
+```sh
+npm run dtp      # deploy (Release build onto the connected iPhone), tag, push
+npm run tdtp     # the same lane with the full test run in front
+```
+
+Either lane bumps the minor version and restarts the build number at 1;
+`tools/deploy-device.sh` is the deploy — it refuses to guess when no single
+connected iPhone is found.
 
 ## Still owed
 

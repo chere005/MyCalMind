@@ -1,5 +1,5 @@
 {
-  "name": "calmind-local",
+  "name": "mycalmind",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -7,8 +7,13 @@
   ],
   "scripts": {
     "test:core": "npm -w @calmind/core run test -- --run",
-    "ios": "npm -w calmind-local-app run ios",
-    "start": "npm -w calmind-local-app run start",
-    "typecheck": "npm -w calmind-local-app exec tsc -- --noEmit"
-  }
+    "ios": "npm -w mycalmind-app run ios",
+    "start": "npm -w mycalmind-app run start",
+    "typecheck": "npm -w mycalmind-app exec tsc -- --noEmit",
+    "test": "npm run test:core",
+    "deploy:device": "sh tools/deploy-device.sh",
+    "dtp": "sh tools/dtp.sh",
+    "tdtp": "sh tools/tdtp.sh"
+  },
+  "version": "1.0.0"
 }
