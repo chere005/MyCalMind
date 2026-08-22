@@ -33,6 +33,13 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   `core/fetchguard.ts` and nowhere else — a second caller of `fetch` in this
   app is a bug until he says otherwise. The guard refuses this device and this
   network, `.local` included, because that is where the Bonjour peers are.
+- **`npm test` and `npm run typecheck` are the gates.** `npm test` runs
+  `packages/core`'s vitest suite (`TZ=America/Chicago` — the spec fixtures are
+  timezone-sensitive); `npm run typecheck` runs `tsc --noEmit` against the app
+  workspace. Both run inside `deploy-device.sh`, and therefore inside every
+  `dtp`/`tdtp`, before anything reaches a device — a failing gate stops the
+  lane rather than shipping around it. There is no lint script in this repo;
+  don't invent one.
 - **`dtp` = deploy, tag, push; `tdtp` = test, deploy, tag, push.** Sean,
   2026-08-22 — two lanes, the `t` in front being the full test run, not the
   tag. `npm run dtp` / `npm run tdtp` (tools/dtp.sh, tools/tdtp.sh). There is
@@ -48,6 +55,55 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   about sharing CalMind's tag namespace — in its own repo, its own bare `x.y.0`
   tags are the point.)
 - **`main` is the branch.** Stage explicit paths — never `git add -A`.
+
+## Platforms
+
+No server, no web instance — local-only, Bonjour peer-to-peer, and the
+device is the only copy of its data. As of 2026-08-22:
+
+- **iOS — builds, but is not installed.** `tools/deploy-device.sh` builds
+  Release and installs it on the connected iPhone, but nothing currently
+  occupies a slot there, on purpose: Apple's free developer team caps one
+  physical device at 3 installed apps, and the phone's three right now are
+  CalMind, ChefMind, and AcctMind. MyCalMind was deliberately freed from the
+  phone on 2026-08-22 to make room for ChefMind's reinstall. Run
+  `tools/deploy-device.sh` (`npm run deploy:device`, or as part of `dtp`/
+  `tdtp`) only when MyCalMind should actually take one of those slots.
+- **watchOS — builds, a real companion app.** The iOS build produces a
+  working watch companion, `Watch/CalMindWatch.app` inside the bundle (the
+  legacy `CalMindWatch` product name is kept on purpose — same
+  on-device-data reasoning as the bundle id). It installs with
+  `xcrun devicectl device install app --device <watch-udid>
+  …/Watch/CalMindWatch.app` (see "Running it" in `README.md`), proven
+  building 2026-08-22, but nothing is installed to a paired watch right now.
+- **macOS — builds, but for a different reason than iOS.** There is no
+  Tauri desktop shell here. The Mac path is the iOS binary run as "My Mac
+  (Designed for iPad)" — the only route a free Apple developer team allows
+  for an iOS-only codebase — and that build is permanently unlaunchable
+  from a shell or Finder (`incorrect executable format`: it's an
+  iOS-platform Mach-O, and macOS's loader refuses it however it's invoked
+  outside Xcode). Running it is an Xcode GUI action only: open the
+  workspace, Product > Destination > My Mac (Designed for iPad) > Run. A
+  true double-clickable Mac app needs Mac Catalyst —
+  `app/ios/Podfile`'s `react_native_post_install` has
+  `:mac_catalyst_enabled => false` right now. That's the identified fix,
+  not yet attempted, deliberately deferred as its own scoped effort (the
+  real unknown is whether the Expo/RN native modules carry
+  Catalyst-compatible slices).
+- **Android — builds, installs, and launches.** `com.seancheren.calmindlocal`,
+  confirmed working on a local emulator 2026-08-22.
+- **Web — none, deliberately.** No server means nothing to build a web
+  instance against.
+
+The iOS/watchOS/macOS/Android builds above (beyond the iPhone install
+`deploy-device.sh` itself does) run through CoreMind's shared
+`bin/build-platforms.sh MyCalMind [--mac] [--ios] [--android]` — table-driven
+per app there, not duplicated per repo. Two rules from that script apply
+here: never run two heavy build/device processes at once on this machine
+(serialize — a concurrent Android build and an xcodebuild has crashed an
+emulator before), and MyCalMind does not ride CoreMind's unattended
+whole-suite `bin/dtp.sh all` cascade — its deploy is a physical device
+install, so it only runs when named explicitly or with `--with-devices`.
 
 ## Traps that have cost real time here
 
