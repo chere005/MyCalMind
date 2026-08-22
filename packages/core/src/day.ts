@@ -15,7 +15,24 @@ const live = (r: { deleted?: boolean }) => !r.deleted;
 const of = <T extends AnyRec['type']>(recs: AnyRec[], t: T) =>
   recs.filter((r) => r.type === t && live(r)) as Rec<T>[];
 
-export type DayReminder = { rec: Rec<'reminder'>; overdue: boolean; rider: boolean };
+export type DayReminder = {
+  rec: Rec<'reminder'>;
+  overdue: boolean;
+  rider: boolean;
+  /**
+   * This row is here because it is LATE, not because it belongs to this day —
+   * its due date is some earlier day and `late` rolled it onto today.
+   *
+   * Reported so the screen can tell the two apart. `overdue` cannot do it: it
+   * means late AND OPEN, so a ticked overdue row has overdue false and looks
+   * exactly like one that belongs here. That mattered the moment Sean turned
+   * Completed on (2026-08-20: "show completed only shows completed reminders
+   * from the day being selected") — today's panel was also showing everything
+   * completed that had been due on other days, because a late row is
+   * collected whether or not it is done.
+   */
+  late: boolean;
+};
 export type DayItems = { events: Rec<'event'>[]; reminders: DayReminder[]; notes: Rec<'note'>[] };
 
 /** Everything on `date`, in the panel's order. `today` decides overdue/riders. */
@@ -64,7 +81,7 @@ export function dayItems(recs: AnyRec[], date: string, today: string, modes?: Re
     // struck through for its two seconds rather than wearing the late colour.
     const late = !!due && due < today && date === today;
     const overdue = late && !done;
-    if (rider || onDate || late) reminders.push({ rec: r, overdue, rider });
+    if (rider || onDate || late) reminders.push({ rec: r, overdue, rider, late: late && !onDate });
   }
   reminders.sort((a, b) => {
     const ka = `${a.rec.payload.due ?? ''}\u0000${a.rec.payload.time ?? ''}`;
@@ -242,4 +259,32 @@ export function twoWeeksFrom(date: string): string[] {
   const out: string[] = [];
   for (let i = 0; i < 14; i++) out.push(addDays(start, i));
   return out;
+}
+
+/**
+ * A day's heading, in the widget's words: "TODAY · AUG 21", "FRI · AUG 22".
+ *
+ * Sean, 2026-08-20: the calendar's list view "needs headers showing dates,
+ * similar to the widget". The widget has written them this way since
+ * 2026-08-12 — uppercase, a middle dot, and NO comma, which he wrote out by
+ * hand when he asked for the weekday there. `toLocaleDateString` with
+ * weekday/month/day punctuates it "Fri, Aug 22" instead, and a heading that
+ * is almost the widget's is worse than one that is plainly different.
+ *
+ * The Swift copy in targets/appwidget/HomeWidget.swift is the original and
+ * stays; this is the app's, kept identical so the two surfaces read the same.
+ * Built from a fixed month table rather than a locale format, for the same
+ * reason timeLabel is: a locale that abbreviates differently would make the
+ * app and the widget disagree on the same phone.
+ */
+const MONTHS_UP = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const WEEKDAYS_UP = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+export function dayHeading(ymd: string, today: string): string {
+  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number];
+  if (!y || !m || !d) return ymd.toUpperCase();
+  const dt = new Date(y, m - 1, d, 12);
+  const md = `${MONTHS_UP[m - 1]} ${d}`;
+  if (ymd === today) return `TODAY · ${md}`;
+  return `${WEEKDAYS_UP[dt.getDay()]} · ${md}`;
 }
