@@ -52,32 +52,50 @@ if [ -z "$UDID" ]; then
   DEVJSON=$(mktemp -t mycalmind-devices)
   xcrun devicectl list devices --json-output "$DEVJSON" >/dev/null 2>&1 \
     || { echo "devicectl cannot list devices — is Xcode installed?" >&2; exit 1; }
-  UDID=$(python3 - "$DEVJSON" <<'PY'
+  # THE UDID, not the identifier. devicectl reports both — `identifier` is the
+  # CoreDevice UUID (6C4D04C6-…) and `hardwareProperties.udid` is the device's
+  # own (00008130-…) — and they are not interchangeable: xcodebuild's
+  # `-destination 'platform=iOS,id=…'` matches a physical device by UDID, so
+  # handing it the CoreDevice UUID fails to find any destination. devicectl
+  # itself takes either, which is exactly what would have made this look fine
+  # right up until the build step.
+  DEVINFO=$(python3 - "$DEVJSON" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
-phones = []
+ios, reachable = [], []
 for dev in d.get('result', {}).get('devices', []):
     hw = dev.get('hardwareProperties', {})
-    conn = dev.get('connectionProperties', {})
     if hw.get('platform') != 'iOS':
         continue
-    if conn.get('tunnelState') in ('connected', 'available'):
-        phones.append((dev.get('identifier', ''), dev.get('deviceProperties', {}).get('name', '?')))
-if len(phones) == 1:
-    print(phones[0][0])
+    udid = hw.get('udid')
+    if not udid:
+        continue
+    name = dev.get('deviceProperties', {}).get('name', '?')
+    ios.append((udid, name))
+    if dev.get('connectionProperties', {}).get('tunnelState') in ('connected', 'available'):
+        reachable.append((udid, name))
+if len(reachable) == 1:
+    print('%s\t%s' % reachable[0])
 else:
-    for udid, name in phones:
-        print(f'  {udid}  {name}', file=sys.stderr)
+    # Nothing on stdout means "choose one yourself"; these go to the operator.
+    for udid, name in (reachable or ios):
+        print('  %s  %s' % (udid, name), file=sys.stderr)
+    if not ios:
+        print('  (devicectl knows no iOS device at all)', file=sys.stderr)
+    elif not reachable:
+        print('  (none of them is currently reachable — plug one in and unlock it)', file=sys.stderr)
 PY
 )
   rm -f "$DEVJSON"
-  if [ -z "$UDID" ]; then
-    echo "refusing: no single connected iPhone found. Plug one in, or name it:" >&2
-    echo "  sh tools/deploy-device.sh <udid>     (xcrun devicectl list devices)" >&2
+  if [ -z "$DEVINFO" ]; then
+    echo "refusing: no single reachable iPhone. Pick one from above and name it:" >&2
+    echo "  sh tools/deploy-device.sh <udid>" >&2
     exit 1
   fi
+  UDID=${DEVINFO%%	*}
+  DEVNAME=${DEVINFO#*	}
 fi
-echo "==> device: $UDID"
+echo "==> device: $UDID${DEVNAME:+ ($DEVNAME)}"
 
 # ----------------------------------------------------------------- the prebuild
 # --clean, because app/ios is disposable prebuild output and a stale project

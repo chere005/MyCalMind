@@ -103,7 +103,7 @@ a trap. The icon is CalMind's own.
 
 ```sh
 npm install
-npm -w @calmind/core run test -- --run     # 612 tests
+npm run test:core                          # 634 tests
 npm run typecheck
 cd app && LANG=en_US.UTF-8 npx expo prebuild --platform ios --clean
 ```
@@ -116,7 +116,7 @@ device; `expo run:ios` cannot mint provisioning, and these bundle ids are new.
 The watch app installs **directly**:
 
 ```bash
-xcrun devicectl device install app --device <watch-udid> <CalMindLocal.app>/Watch/CalMindWatch.app
+xcrun devicectl device install app --device <watch-udid> <MyCalMind.app>/Watch/CalMindWatch.app
 ```
 
 **A Debug build is not self-contained.** It loads its bundle from Metro on
