@@ -40,10 +40,11 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
 - **`npm test` and `npm run typecheck` are the gates.** `npm test` runs
   `packages/core`'s vitest suite (`TZ=America/Chicago` — the spec fixtures are
   timezone-sensitive); `npm run typecheck` runs `tsc --noEmit` against the app
-  workspace. Both run inside `deploy-device.sh`, and therefore inside every
-  `dtp`/`tdtp`, before anything reaches a device — a failing gate stops the
-  lane rather than shipping around it. There is no lint script in this repo;
-  don't invent one.
+  workspace. The lane runs BOTH on every run — they used to live inside
+  `deploy-device.sh`, which stopped fronting the lane on 2026-08-23, and
+  taking the phone install out must not have taken the gates with it. A
+  failing gate stops the lane rather than shipping around it. There is no
+  lint script in this repo; don't invent one.
 - **`npm run dtp` / `npm run tdtp`** (tools/dtp.sh, tools/tdtp.sh). There is
   no server and no web instance, so what a release ships is its platform
   builds, made by this repo's OWN `tools/build-platforms.sh` (2026-08-23:
@@ -147,16 +148,16 @@ wrong side.
 ## Platforms
 
 No server, no web instance — local-only, Bonjour peer-to-peer, and the
-device is the only copy of its data. As of 2026-08-22:
+device is the only copy of its data. As of 2026-08-23:
 
-- **iOS — builds, but is not installed.** `tools/deploy-device.sh` builds
-  Release and installs it on the connected iPhone, but nothing currently
-  occupies a slot there, on purpose: Apple's free developer team caps one
-  physical device at 3 installed apps, and the phone's three right now are
-  CalMind, ChefMind, and AcctMind. MyCalMind was deliberately freed from the
-  phone on 2026-08-22 to make room for ChefMind's reinstall. Run
-  `tools/deploy-device.sh` (`npm run deploy:device`, or as part of `dtp`/
-  `tdtp`) only when MyCalMind should actually take one of those slots.
+- **iOS — build-checked every release, never installed.** The lane compiles
+  Release (watch companion included) and stops; nothing occupies a slot on
+  the phone, on purpose. Apple's free developer team caps one physical device
+  at 3 installed apps, and the phone's three are CalMind, ChefMind and
+  AcctMind; MyCalMind was freed from it on 2026-08-22 to make room for
+  ChefMind's reinstall. `tools/deploy-device.sh` (`npm run deploy:device`) is
+  the deliberate install and is NOT part of `dtp`/`tdtp` — run it only when
+  MyCalMind should actually take one of those slots.
 - **watchOS — builds, a real companion app.** The iOS build produces a
   working watch companion, `Watch/CalMindWatch.app` inside the bundle (the
   legacy `CalMindWatch` product name is kept on purpose — same
@@ -207,7 +208,7 @@ device is the only copy of its data. As of 2026-08-22:
   and React Native core always build from source (slower), and a
   CocoaPods-generated file is shell-patched on every run.
 - **Android — builds, installs, and launches.** `com.seancheren.calmindlocal`,
-  confirmed working on a local emulator 2026-08-22.
+  confirmed on the local emulator 2026-08-23 (1.2.0, versionCode 6).
 - **Web — none, deliberately.** No server means nothing to build a web
   instance against.
 
