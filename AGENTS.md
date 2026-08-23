@@ -45,13 +45,18 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   lane rather than shipping around it. There is no lint script in this repo;
   don't invent one.
 - **`npm run dtp` / `npm run tdtp`** (tools/dtp.sh, tools/tdtp.sh). There is
-  no server and no web instance, so "deploy" is `tools/deploy-device.sh`: a
-  Release build installed on the connected iPhone (the watch app installs
-  separately; the script prints the command). The version bump lands in
-  `package.json` + `app/app.json`, and RESTARTS `ios.buildNumber`/
-  `android.versionCode` at 1: a dtp puts a build on the phone, and the build
-  number is how two installs are told apart (AcctMind's lesson). A re-run of
-  a failed deploy bumps only the build number. (The old rule "CalMind-Local
+  no server and no web instance, so what a release ships is its platform
+  builds, made by this repo's OWN `tools/build-platforms.sh` (2026-08-23:
+  "all apps should have a deploy on their own mechanism inside their repo"):
+  the Catalyst bundle before the tag, Android on the emulator after the push,
+  iOS build-checked but NEVER installed — the phone install stays the
+  explicit `tools/deploy-device.sh`, because it spends one of the phone's 3
+  free-team slots. The bump RESTARTS `ios.buildNumber` at 1 and INCREMENTS
+  `android.versionCode` — they are different kinds of number: buildNumbers
+  reset per marketing version, versionCode is one monotonic integer per
+  device, ever (proven 2026-08-23: a reset shipped versionCode 1 against an
+  emulator holding 4 — INSTALL_FAILED_VERSION_DOWNGRADE). A re-run of a
+  failed release bumps only the build number. (The old rule "CalMind-Local
   is not tagged" was about sharing CalMind's tag namespace — in its own repo,
   its own bare `x.y.0` tags are the point.)
 
@@ -206,15 +211,14 @@ device is the only copy of its data. As of 2026-08-22:
 - **Web — none, deliberately.** No server means nothing to build a web
   instance against.
 
-The iOS/watchOS/macOS/Android builds above (beyond the iPhone install
-`deploy-device.sh` itself does) run through CoreMind's shared
-`bin/build-platforms.sh MyCalMind [--mac] [--ios] [--android]` — table-driven
-per app there, not duplicated per repo. Two rules from that script apply
-here: never run two heavy build/device processes at once on this machine
-(serialize — a concurrent Android build and an xcodebuild has crashed an
-emulator before), and MyCalMind does not ride CoreMind's unattended
-whole-suite `bin/dtp.sh all` cascade — its deploy is a physical device
-install, so it only runs when named explicitly or with `--with-devices`.
+The platform builds run through this repo's own
+`tools/build-platforms.sh [--mac] [--ios] [--android]` (since 2026-08-23;
+CoreMind's `bin/build-platforms.sh` remains the table-driven fallback for a
+checkout that predates it, and `bin/patch-rndeps-catalyst.js` travels here as
+`tools/patch-rndeps-catalyst.js`). MyCalMind rides CoreMind's `dtp all`
+cascade like every app now — safely, because the lane never installs to a
+phone: iOS is build-checked only, and the install stayed a deliberate,
+explicit act.
 
 ## Traps that have cost real time here
 

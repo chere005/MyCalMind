@@ -27,9 +27,10 @@
 #   1. typecheck + core suite, EVERY run — see the gates below for why the
 #      --full distinction no longer decides this
 #   2. version: if the current version is tagged, bump the MINOR
-#      (x.y.0 → x.(y+1).0) in package.json + app/app.json and RESTART
-#      ios.buildNumber/android.versionCode at 1 — a dtp is what puts builds
-#      on devices, and the build number is how two installs are told apart.
+#      (x.y.0 → x.(y+1).0) in package.json + app/app.json, RESTART
+#      ios.buildNumber at 1 and INCREMENT android.versionCode — the two are
+#      not the same kind of number: buildNumbers reset per marketing version,
+#      versionCode is one monotonic integer per device, ever.
 #      If the current version is still UNTAGGED (an earlier run failed before
 #      tagging), reuse it and bump only the build number: a second build of
 #      the same release is leaving the machine.
@@ -179,8 +180,13 @@ done
 if git rev-parse -q --verify "refs/tags/$CUR" >/dev/null; then
   NEW=$(echo "$CUR" | awk -F. '{printf "%d.%d.0", $1, $2+1}')
   NEWBUILD=1
-  NEWCODE=1
-  echo "==> version: $CUR (tagged) -> $NEW, build number restarts at 1"
+  # versionCode NEVER restarts. iOS buildNumbers reset per marketing version;
+  # Android's versionCode is one device-wide monotonic integer, and resetting
+  # it makes every install a DOWNGRADE the OS refuses. Paid for on 2026-08-23:
+  # 1.1.0 shipped versionCode 1 against an emulator holding 4 —
+  # INSTALL_FAILED_VERSION_DOWNGRADE, on the release's own lane.
+  NEWCODE=$((VCODE + 1))
+  echo "==> version: $CUR (tagged) -> $NEW, build 1, versionCode $VCODE -> $NEWCODE"
 else
   NEW="$CUR"
   NEWBUILD=$((BUILD + 1))
