@@ -56,6 +56,90 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   tags are the point.)
 - **`main` is the branch.** Stage explicit paths — never `git add -A`.
 
+## Commands
+
+```sh
+npm install            # once, at the ROOT — the workspaces are packages/* and app
+npm test               # = test:core, the whole vitest suite (634 tests)
+npm run typecheck      # tsc --noEmit over the app workspace, which pulls core in
+npm run deploy:device  # the deploy alone: Release build onto the connected iPhone
+npm run dtp            # deploy, tag, push          (tools/dtp.sh)
+npm run tdtp           # test, deploy, tag, push    (tools/tdtp.sh -> dtp.sh --full)
+npm run start          # Metro — but read the :8081 trap below before you look at it
+```
+
+One file, or one test by name, out of core's 48 suites — the flags go after
+`--`, and `--run` is not optional, since vitest without it sits in watch mode:
+
+```sh
+npm -w @calmind/core run test -- --run parse.test
+npm -w @calmind/core run test -- --run -t 'clamped steps'
+```
+
+Run them THAT way rather than `npx vitest` from inside `packages/core`:
+`TZ=America/Chicago` lives in core's own `test` script, and a bare vitest is
+the one way to lose it — the fixtures are timezone-sensitive, so what you get
+is a handful of off-by-a-day failures that look like real breakage.
+
+`app/AGENTS.md` is a single line and means it: Expo has changed, so read the
+versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing Expo
+code rather than recalling an older SDK's API.
+
+## The shape of it
+
+Two layers and a thin native edge, and the split is the whole design: what is
+a RULE lives in `packages/core` as plain TypeScript — no React, no
+`react-native`, no platform — so the vitest suite can hold all of it; what is a
+SCREEN lives in `app`. A rule that grows a `Platform.OS` in it has moved to the
+wrong side.
+
+- **`packages/core`** — the brain. A record is `{ id, type, updated, deleted?,
+  payload }` (`types.ts`), and folders, sections and calendars are records too,
+  referenced BY ID and never by name, so a rename touches one record. Position
+  in a list is a fractional string key (`order.ts`), so a drag rewrites one
+  row rather than renumbering the list. `SyncEngine` (`sync.ts`) is the store
+  itself: a map of records merged per-record last-write-wins on `updated`, a
+  tie keeping the incumbent — which is what makes a peer's echo of our own
+  record a no-op instead of a game of catch. `normalize.ts` is the repair pass
+  run on every refresh. Around those sit the domain files: `parse` (the
+  slash-only date parser), `repeats`/`rrule`, `day`/`layout` (the calendar
+  grid), `recipe` (the largest, and the one with an importer behind it),
+  `watch` (the feed the wrist reads), `ical`, `search`, `backup`, `undo`,
+  `habit`.
+- **`spec/*.json`** — four vector files replayed by `test/spec.test.ts`. They
+  are the behaviour contract this core shares with the suite's other
+  implementations, so a behaviour change starts by amending a vector; a test
+  edited to match new output has silently forked the contract.
+- **`app/src/store.tsx`** — the one stateful seam, and the file to read first.
+  Every screen reads through `useStore()` and writes through `mutate(fn)`,
+  which stamps the edit, re-renders, persists IMMEDIATELY (no debounce — the
+  snapshot is the only copy) and sends just the changed records to the peers.
+  Its header explains the three things this build had to do differently from
+  upstream: fixed starter ids, the wait before seeding, and what happens to a
+  snapshot that will not parse.
+- **No router.** `App.tsx` is a five-way switch on a `tab` string with its own
+  back stack; `nav.tsx` is the bottom bar, `chrome.tsx` the top bar that every
+  screen mounts (and that hands every screen Settings for free). One file per
+  tab in `app/src/screens`, plus Search, Settings and RecipeEditor.
+- **Theming without prop-drilling.** `theme.ts` exports a MUTABLE palette `T`
+  and a `themed()` sheet wrapper; `applyTheme` swaps the values in place and
+  bumps a generation, `App.tsx` remounts the tree, and no component knows
+  themes exist. The semantic colours (overdue, danger, the event blue) are
+  literal across all four themes on purpose.
+- **The native edge.** Three Expo modules in `app/modules` — `peer-sync` (the
+  Bonjour transport and its TLS-by-passphrase handshake), `watch-bridge`
+  (WatchConnectivity plus the widget's queued ticks), `native-ocr` (Vision, on
+  device) — and three `@bacons/apple-targets` in `app/targets`: `watch`,
+  `watchwidget` (the complication) and `appwidget` (the home screen). Every JS
+  side loads through `requireOptionalNativeModule` and no-ops when the module
+  is absent, so Android, Expo Go and web never branch on any of it. The
+  modules are deliberately DUMB PIPES: `peer-sync` carries opaque JSON and the
+  merge stays in core, because a second last-write-wins written in Swift is
+  exactly the thing that drifts from the first and is only noticed when two
+  devices disagree. The widget and complication cannot reach the store at all
+  — they read the App Group container, which is why that one id appears in
+  four Swift files.
+
 ## Platforms
 
 No server, no web instance — local-only, Bonjour peer-to-peer, and the
@@ -93,22 +177,31 @@ device is the only copy of its data. As of 2026-08-22:
   RCT_USE_PREBUILT_RNCORE=0` before `expo prebuild` — because those
   XCFrameworks' generated CocoaPods copy scripts have no `maccatalyst` case
   at all when the framework wasn't packaged with one.
-  **Not yet durable:** `ReactNativeDependencies.xcframework` (React Native's
-  third-party C++ deps — folly/glog/boost) has NO source-build option and
-  IS packaged with a maccatalyst slice, but that slice's bundle is
-  malformed (duplicate real content instead of a proper
-  `Versions/Current` symlink structure, plus three privacy-manifest-only
-  resource bundles that need to live under `Versions/A` too, not the
-  bundle root) — codesign refuses it as shipped. The repair currently lives
-  as hand-appended shell logic on the "`[CP-User] [RNDeps] Replace React
-  Native Dependencies…`" script phase in the GENERATED
-  `ios/Pods/Pods.xcodeproj` (`alwaysOutOfDate`, re-extracts the pristine
-  broken bundle on every single build, which is why this needs to be
-  patched into that exact phase rather than just fixed once beforehand).
-  It does not survive a fresh `pod install`/`prebuild` yet — ask Sean before
-  automating this into `bin/build-platforms.sh`'s catalyst path, since it
-  means always forcing both apps' dependencies to build from source (slower)
-  and shell-patching a CocoaPods-generated file on every run.
+  **The `ReactNativeDependencies` repair — automated, and no longer yours to
+  redo.** That XCFramework (React Native's third-party C++ deps —
+  folly/glog/boost) has NO source-build option and IS packaged with a
+  maccatalyst slice, but that slice's bundle is malformed: the top-level
+  binary and `Resources/` are real duplicate copies where a macOS-style
+  versioned framework needs symlinks through `Versions/Current -> A`, and
+  three privacy-manifest-only
+  `ReactNativeDependencies_{boost,folly,glog}.bundle` sit at the bundle root,
+  tripping "unsealed contents present in the root directory of an embedded
+  framework". Codesign refuses it as shipped. The repair is CoreMind's
+  `bin/patch-rndeps-catalyst.js` (idempotent), and `bin/build-platforms.sh`'s
+  catalyst path runs it between the prebuild and `xcodebuild`, aborting the
+  build if it cannot — so a fresh `pod install`/`prebuild` no longer loses
+  it (CoreMind `d26b647`, 2026-08-22). Two things about it are worth knowing
+  before touching it. It patches the fix INTO the "`[CP-User] [RNDeps]
+  Replace React Native Dependencies…`" script phase of the GENERATED
+  `ios/Pods/Pods.xcodeproj` rather than repairing `ios/Pods` beforehand,
+  because that phase is `alwaysOutOfDate` and re-extracts the pristine broken
+  bundle on every single build — a fix applied before `xcodebuild` is wiped
+  moments later, proven twice while chasing this. And the three resource
+  bundles are DROPPED, not moved: under `Versions/A` codesign then wants them
+  independently signed as subcomponents, which they neither are nor need to
+  be. The costs were accepted rather than overlooked — the app's Expo modules
+  and React Native core always build from source (slower), and a
+  CocoaPods-generated file is shell-patched on every run.
 - **Android — builds, installs, and launches.** `com.seancheren.calmindlocal`,
   confirmed working on a local emulator 2026-08-22.
 - **Web — none, deliberately.** No server means nothing to build a web
