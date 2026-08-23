@@ -8,9 +8,11 @@ their `calmindlocal` spellings, because those ARE the installed app's identity
 and its data (`AGENTS.md` has the full list).
 
 **Platforms:** iOS and watchOS (SwiftUI watch app, watch-face complication,
-home-screen widget), entirely local — no server, no accounts; devices mirror
-each other over Bonjour on the local network. The Mac runs the iOS binary as
-"My Mac (Designed for iPad)". There is no web instance, deliberately.
+home-screen widget); macOS as a real Mac Catalyst app, installed at
+`/Applications/MyCalMind.app`; and Android, which builds, installs and
+launches on the local emulator. All of them entirely local — no server, no
+accounts; devices mirror each other over Bonjour on the local network. There
+is no web instance, deliberately.
 
 It is not a rewrite and not a lookalike — it is the app from CalMind's
 `apps/app` and `packages/core`, copied whole and then gutted of everything
@@ -24,8 +26,11 @@ app/            The Expo app, cloned from CalMind's apps/app — screens,
 packages/core/  The brain, cloned verbatim minus the two modules that only
                 existed to talk to a server.
 spec/           The behaviour contract, copied so core's suite runs here.
-tools/          deploy-device.sh (the phone IS production) and the dtp/tdtp
-                release lanes.
+tools/          dtp.sh / tdtp.sh, the release lanes; build-platforms.sh, the
+                Mac Catalyst / iOS / Android builds a release ships, with
+                patch-rndeps-catalyst.js beside it (the Catalyst codesign
+                repair it cannot build without); and deploy-device.sh, the
+                deliberate iPhone install, which is NOT part of a release.
 ```
 
 ## What was taken out, and why
@@ -124,18 +129,33 @@ xcrun devicectl device install app --device <watch-udid> <MyCalMind.app>/Watch/C
 silently gets *that* app, login screen and all. Build Release to look at this
 one.
 
+For the Mac and Android builds by hand, use the same script the release lane
+does — `sh tools/build-platforms.sh --mac` (Catalyst into `/Applications`),
+`--android` (emulator), `--ios` (build check only) — naming none of them means
+all three — and `--dry-run` to see the plan before anything runs.
+
 ## Releasing it
 
 ```sh
-npm run dtp      # deploy (Release build onto the connected iPhone), tag, push
+npm run dtp      # gates, bump, the Mac Catalyst app into /Applications, tag,
+                 # push, then Android on the emulator and the iOS build check
 npm run tdtp     # the same lane with the full test run in front
 ```
 
-Either lane bumps the minor version and restarts the build number at 1;
-`tools/deploy-device.sh` is the deploy — it refuses to guess when no single
-connected iPhone is found.
+The Catalyst build comes BEFORE the tag and is fatal — a broken desktop build
+leaves the version untagged, so a re-run reuses it. Android and the iOS build
+check come after the push and are reported rather than fatal; the release has
+already happened by then.
 
-## Still owed
+**A release never touches the phone.** iOS is build-checked only: Apple's free
+developer team caps one physical device at 3 installed apps, and MyCalMind is
+deliberately not one of the three. `tools/deploy-device.sh`
+(`npm run deploy:device`) is the explicit install for the day it should take a
+slot — it refuses to guess when no single connected iPhone is found.
 
-- **macOS** — no desktop shell has been cloned; the Mac runs the iOS binary as
-  "My Mac (Designed for iPad)", which is what a free team allows.
+Either lane bumps the minor version, but the two build numbers are different
+kinds of number. `ios.buildNumber` RESTARTS at 1, because a build number is
+per marketing version. `android.versionCode` only ever INCREMENTS: it is one
+monotonic integer per device, for ever. Paid for on 2026-08-23, when a reset
+shipped versionCode 1 to an emulator already holding 4 and the install came
+back `INSTALL_FAILED_VERSION_DOWNGRADE`.

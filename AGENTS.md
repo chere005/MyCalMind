@@ -18,6 +18,16 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   makes the copying a deliberate act rather than a shared working tree.
   Diverging by hand is how the two stop being the same app, which is the
   entire value of this being a copy.
+- **The lane REFUSES to ship drifted core — that rule made enforceable.**
+  Before it touches anything, `tools/dtp.sh` runs CoreMind's
+  `bin/check-drift.sh MyCalMind`, which proves every exact-row file here still
+  carries the canon bytes; a failure stops the WHOLE lane, because a release
+  built on drifted core tags a fork nobody decided on, under a version number
+  claiming it is still the clone. The lane will not rewrite source to make
+  itself pass — the fix is the copy-down, run deliberately and committed
+  first: `sh ../CoreMind/bin/deploy-core.sh --only MyCalMind`. No CoreMind
+  checkout beside this repo is a WARNING, not a refusal: the gate could not
+  run, and that is a different thing from having failed.
 - **The rename was display-deep, and stays that way.** MyCalMind is the NAME:
   app.json's `name`/`slug`, the three targets' `displayName`s, the strings on
   screen, the docs. The IDENTITY did not move and must not:
@@ -49,9 +59,13 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   no server and no web instance, so what a release ships is its platform
   builds, made by this repo's OWN `tools/build-platforms.sh` (2026-08-23:
   "all apps should have a deploy on their own mechanism inside their repo"):
-  the Catalyst bundle before the tag, Android on the emulator after the push,
-  iOS build-checked but NEVER installed — the phone install stays the
-  explicit `tools/deploy-device.sh`, because it spends one of the phone's 3
+  the Catalyst bundle into `/Applications` BEFORE the tag and FATAL — a broken
+  desktop build leaves the version untagged, so a re-run reuses it rather than
+  burning a number — then Android on the emulator and the iOS build check
+  AFTER the push, reported rather than fatal, because by then the release has
+  already happened and an emulator that will not boot is not a failed one. iOS
+  is build-checked but NEVER installed: the phone install stays the explicit
+  `tools/deploy-device.sh`, because it spends one of the phone's 3
   free-team slots. The bump RESTARTS `ios.buildNumber` at 1 and INCREMENTS
   `android.versionCode` — they are different kinds of number: buildNumbers
   reset per marketing version, versionCode is one monotonic integer per
@@ -60,6 +74,21 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   failed release bumps only the build number. (The old rule "CalMind-Local
   is not tagged" was about sharing CalMind's tag namespace — in its own repo,
   its own bare `x.y.0` tags are the point.)
+- **A single-repo release is still a release, so the lane reports itself.**
+  The baseline's rule — a release reports to seancheren.com/status through
+  CoreMind's `bin/report-status.sh`, and a status failure never fails a
+  release — is wired into `tools/dtp.sh` itself, after CoreMind's `bin/dtp.sh`
+  stopped being what ran here (Sean, 2026-08-23: "i dont see the tdtp from
+  ChefMind on status"). It opens a run at the top and arms an EXIT/INT/TERM
+  trap that closes it `failed`, so a lane that dies anywhere — a refused push,
+  a Ctrl-C — cannot leave MyCalMind purple on the page for ever; it finishes
+  `ok` with severity 2 when the release is live but a device build did not
+  run. Every call is `|| true` and the reporter exits 0 on all of its own
+  failure paths, by design. And it DEFERS when `MIND_RUN_ID` is set: CoreMind's
+  orchestrator has already opened one card for the whole batch and passes the
+  id down (Sean, 2026-08-23: "there should be one card per tdtp if multiple
+  jobs are triggered in one batch"), so a lane run inside `dtp all` reports
+  nothing of its own. Run alone, it opens and closes its own card.
 
 ## Commands
 
@@ -67,11 +96,24 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
 npm install            # once, at the ROOT — the workspaces are packages/* and app
 npm test               # = test:core, the whole vitest suite (634 tests)
 npm run typecheck      # tsc --noEmit over the app workspace, which pulls core in
-npm run deploy:device  # the deploy alone: Release build onto the connected iPhone
-npm run dtp            # deploy, tag, push          (tools/dtp.sh)
-npm run tdtp           # test, deploy, tag, push    (tools/tdtp.sh -> dtp.sh --full)
+npm run dtp            # the release lane: gates, bump, platform builds, tag,
+                       #   push — what it ships is in Standing rules (tools/dtp.sh)
+npm run tdtp           # the same lane, --full      (tools/tdtp.sh -> dtp.sh --full)
+npm run deploy:device  # NOT part of dtp/tdtp: the deliberate Release build and
+                       #   install onto the connected iPhone, which spends one of
+                       #   its 3 free-team slots. Run it only when MyCalMind
+                       #   should actually take one.
 npm run start          # Metro — but read the :8081 trap below before you look at it
 ```
+
+The lane takes the platform flags through to `tools/build-platforms.sh` and
+uses its convention: `--mac`, `--ios`, `--android` select, naming NONE means
+all three, and they compose. `--web` — what CoreMind's orchestrator passes
+every self-shipping lane on a plain `dtp all` — means the release and no
+platform builds, since this repo has no web to build. A POSITIONAL argument is
+refused: it used to be a phone UDID, and the message points at
+`sh tools/deploy-device.sh <udid>` so that a release can never spend a device
+slot as a side effect.
 
 One file, or one test by name, out of core's 48 suites — the flags go after
 `--`, and `--run` is not optional, since vitest without it sits in watch mode:
@@ -191,12 +233,14 @@ device is the only copy of its data. As of 2026-08-23:
   three privacy-manifest-only
   `ReactNativeDependencies_{boost,folly,glog}.bundle` sit at the bundle root,
   tripping "unsealed contents present in the root directory of an embedded
-  framework". Codesign refuses it as shipped. The repair is CoreMind's
-  `bin/patch-rndeps-catalyst.js` (idempotent), and `bin/build-platforms.sh`'s
-  catalyst path runs it between the prebuild and `xcodebuild`, aborting the
-  build if it cannot — so a fresh `pod install`/`prebuild` no longer loses
-  it (CoreMind `d26b647`, 2026-08-22). Two things about it are worth knowing
-  before touching it. It patches the fix INTO the "`[CP-User] [RNDeps]
+  framework". Codesign refuses it as shipped. The repair is
+  `tools/patch-rndeps-catalyst.js` (idempotent — copied VERBATIM from
+  CoreMind's `bin/`, where it was written, so its own "bin/" self-references
+  mean that origin: CoreMind `d26b647`, 2026-08-22), and
+  `tools/build-platforms.sh`'s catalyst path runs it between the prebuild and
+  `xcodebuild`, aborting the build if it cannot — so a fresh
+  `pod install`/`prebuild` no longer loses it. Two things about it are worth
+  knowing before touching it. It patches the fix INTO the "`[CP-User] [RNDeps]
   Replace React Native Dependencies…`" script phase of the GENERATED
   `ios/Pods/Pods.xcodeproj` rather than repairing `ios/Pods` beforehand,
   because that phase is `alwaysOutOfDate` and re-extracts the pristine broken
@@ -215,8 +259,7 @@ device is the only copy of its data. As of 2026-08-23:
 The platform builds run through this repo's own
 `tools/build-platforms.sh [--mac] [--ios] [--android]` (since 2026-08-23;
 CoreMind's `bin/build-platforms.sh` remains the table-driven fallback for a
-checkout that predates it, and `bin/patch-rndeps-catalyst.js` travels here as
-`tools/patch-rndeps-catalyst.js`). MyCalMind rides CoreMind's `dtp all`
+checkout that predates it). MyCalMind rides CoreMind's `dtp all`
 cascade like every app now — safely, because the lane never installs to a
 phone: iOS is build-checked only, and the install stayed a deliberate,
 explicit act.
