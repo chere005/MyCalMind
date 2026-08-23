@@ -291,8 +291,6 @@ explicit act.
 - **The simulator may be shared with a CalMind session.** Its app can take the
   foreground mid-test and swallow your taps and typing. Boot a second device
   rather than fighting for the first.
-- **The shell's working directory persists between Bash calls.** Use absolute
-  paths; a `cd app` earlier in the session breaks the next relative command.
 - **Ask what happens when a write fails.** The snapshot here is the ONLY copy —
   upstream it is a cache of what the server holds. A snapshot that will not
   parse is moved aside and reported, never treated as an empty store: empty and
