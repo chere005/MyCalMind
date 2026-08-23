@@ -4,38 +4,71 @@
 # calls this with --full. (Sean's shorthand, 2026-08-22: dtp = deploy, tag,
 # push; tdtp = test, deploy, tag, push.)
 #
-# There is no server and no web instance — "deploy" here is
-# tools/deploy-device.sh: a Release build installed on the connected iPhone.
+# THIS REPO SHIPS ITSELF (Sean, 2026-08-23: "all apps should have a deploy on
+# their own mechanism inside their repo"). There is no server and no web
+# instance — what a MyCalMind release ships is its platform builds, made by
+# this repo's own tools/build-platforms.sh:
+#   · macOS: a real Mac Catalyst app into /Applications — BEFORE the tag, so
+#     a broken desktop build leaves the version untagged and a re-run reuses it
+#   · Android: built, installed and launched on the local emulator — AFTER
+#     the push, reported but never fatal
+#   · iOS: BUILD-CHECKED only, never installed — AFTER the push, non-fatal.
+#     The phone's free-team cap is 3 apps and Sean keeps MyCalMind off it
+#     deliberately; tools/deploy-device.sh is the explicit install path and
+#     is NOT part of this lane. (The watch companion builds inside the iOS
+#     bundle; installing it is likewise explicit.)
 # (The old rule "CalMind-Local is not tagged" was about sharing CalMind's tag
 # namespace; in its own repo, its own tags are the point.)
 #
 # What a run does, in order:
-#   0. refuse a tree with uncommitted TRACKED changes — the tag must name
-#      exactly what shipped
-#   1. (--full only) typecheck + core suite up front (the deploy runs its own
-#      gates as well; today the two lanes converge, and anything slower lands
-#      in the full lane the day it exists)
+#   0. refuse a wrong branch, then refuse CORE DRIFT (the gate below), then
+#      refuse a tree with uncommitted TRACKED changes — the tag must name
+#      exactly what shipped, and it must name a true clone
+#   1. typecheck + core suite, EVERY run — see the gates below for why the
+#      --full distinction no longer decides this
 #   2. version: if the current version is tagged, bump the MINOR
 #      (x.y.0 → x.(y+1).0) in package.json + app/app.json and RESTART
-#      ios.buildNumber/android.versionCode at 1 — a dtp is what puts a build
-#      on the phone, and the build number is how two installs are told apart.
+#      ios.buildNumber/android.versionCode at 1 — a dtp is what puts builds
+#      on devices, and the build number is how two installs are told apart.
 #      If the current version is still UNTAGGED (an earlier run failed before
 #      tagging), reuse it and bump only the build number: a second build of
 #      the same release is leaving the machine.
-#   3. deploy: tools/deploy-device.sh [udid]
+#   3. the Mac Catalyst bundle (tools/build-platforms.sh --mac) — BEFORE the
+#      tag. A failed desktop build stops everything: never tag around one.
 #   4. tag X.Y.0 (BARE — no v) (annotated); 5. git push --follow-tags
-#   A failed deploy stops everything — never tag around one.
+#   6. the device builds — Android on the emulator, then the iOS build check
+#      — AFTER the push and reported rather than fatal: the release has
+#      already happened, and an emulator that will not boot must not read as
+#      a failed one. ONE AT A TIME, never in parallel — two heavy builds at
+#      once has broken this machine twice.
+#
+# WHICH PLATFORMS: naming one selects only it, naming none means all of them —
+# tools/build-platforms.sh's own convention.
 set -e
 cd "$(dirname "$0")/.."
 
-FULL=0; UDID=""
+FULL=0; PICKED=0; WANT_MAC=0; WANT_IOS=0; WANT_ANDROID=0
 for a in "$@"; do
   case "$a" in
-    --full) FULL=1 ;;
+    --full)    FULL=1 ;;
+    --mac)     WANT_MAC=1;     PICKED=1 ;;
+    --ios)     WANT_IOS=1;     PICKED=1 ;;
+    --android) WANT_ANDROID=1; PICKED=1 ;;
+    # "the release and no platform builds" — what CoreMind's orchestrator
+    # passes every self-shipping lane on a plain `dtp all`. This repo has no
+    # web, so here it means: gates, bump, tag, push, build nothing.
+    --web)     PICKED=1 ;;
     -*) echo "unknown flag: $a" >&2; exit 1 ;;
-    *) UDID="$a" ;;
+    # The positional used to be a device UDID for the phone install. That
+    # install spends one of the phone's 3 free-team slots, so it is explicit
+    # now, never a release side effect (see the header).
+    *) echo "refusing: this lane no longer installs to the phone." >&2
+       echo "  For the deliberate install: sh tools/deploy-device.sh $a" >&2
+       exit 1 ;;
   esac
 done
+# --full is not a platform, so `tdtp` with no other flag still means all three.
+[ "$PICKED" = 1 ] || { WANT_MAC=1; WANT_IOS=1; WANT_ANDROID=1; }
 
 # ---------------------------------------------------------------- the branch
 # The push below names main explicitly, so a lane run from any other branch
@@ -45,6 +78,49 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$BRANCH" != "main" ]; then
   echo "refusing: this lane ships main, and HEAD is on '$BRANCH'" >&2
   exit 1
+fi
+
+# ------------------------------------------------------------- the core drift
+# The clone must BE a clone when it ships. CoreMind's check proves every
+# exact-row file here still carries the canon bytes; a release built on
+# drifted core would tag a fork nobody decided on, under a version number that
+# claims otherwise. Auto-rewriting source mid-release is not allowed — the
+# gate makes the dependency LOUD instead, and the fix is CoreMind's own
+# copy-down, run deliberately and committed before the lane runs again.
+# No CoreMind checkout beside this repo is a warning, not a refusal — same
+# stance as the status reporter below.
+CHECKDRIFT="${MIND_DIR:-$(cd .. && pwd)}/CoreMind/bin/check-drift.sh"
+if [ -f "$CHECKDRIFT" ]; then
+  DRIFTOUT=$(sh "$CHECKDRIFT" MyCalMind 2>&1) || {
+    printf '%s\n' "$DRIFTOUT" >&2
+    echo "refusing: CoreMind's drift check failed for this repo — see above." >&2
+    echo "  For DRIFT in exact rows, land the copy-down and re-run the lane:" >&2
+    echo "    sh ../CoreMind/bin/deploy-core.sh --only MyCalMind" >&2
+    exit 1
+  }
+else
+  echo "   WARNING: no CoreMind checkout beside this repo — the core drift gate did not run" >&2
+fi
+
+# ------------------------------------------------------------- the status page
+# A SINGLE-REPO RELEASE IS STILL A RELEASE. Sean, 2026-08-23: "i dont see the
+# tdtp from ChefMind on status". CoreMind's bin/dtp.sh had reported to
+# seancheren.com/status since the page existed; a repo shipping ITSELF did not,
+# so the page went quiet for exactly the runs nobody else knew were coming — and
+# the history graph recorded no purple for them at all.
+#
+# NEVER FATAL. report-status.sh exits 0 on every failure path by design, and the
+# `|| true` here covers the case where CoreMind is not checked out beside this
+# repo at all. A status page must never be the thing that stops a release.
+REPORTER="${MIND_DIR:-$(cd .. && pwd)}/CoreMind/bin/report-status.sh"
+RUN_ID=""
+REPORT_DONE=0
+if [ -f "$REPORTER" ]; then
+  KIND=dtp; [ "$FULL" = 1 ] && KIND=tdtp
+  RUN_ID=$(sh "$REPORTER" start "$KIND" MyCalMind 2>/dev/null || true)
+  # A lane that dies anywhere — a failed deploy, a refused push, a Ctrl-C —
+  # must not leave this repo purple on the page for ever.
+  trap 'if [ -n "$RUN_ID" ] && [ "$REPORT_DONE" != 1 ]; then sh "$REPORTER" finish "$RUN_ID" failed 3 "stopped before finishing" >/dev/null 2>&1 || true; fi' EXIT INT TERM
 fi
 
 # ------------------------------------------------------- the tree, then a pull
@@ -66,11 +142,15 @@ if git remote get-url origin >/dev/null 2>&1; then
   refuse_dirty "the pull left the tree dirty — a conflicted autostash pop exits 0, so this is the check that catches it"
 fi
 
-if [ "$FULL" = 1 ]; then
-  echo "==> tdtp: the full run, before anything is touched"
-  npm run -s typecheck || { echo "typecheck failed — nothing shipped" >&2; exit 1; }
-  npm run -s test:core -- --reporter=dot || { echo "core suite failed — nothing shipped" >&2; exit 1; }
-fi
+# ------------------------------------------------------------------- the gates
+# EVERY run, not just --full: tools/deploy-device.sh used to be this lane's
+# deploy step and ran typecheck + core inside itself, so a plain dtp was never
+# ungated — taking the phone install out of the lane must not take the gates
+# out with it. --full stays the tdtp spelling; today the two lanes converge,
+# and anything slower lands in the full lane the day it exists.
+[ "$FULL" = 1 ] && echo "==> tdtp: the full run, before anything is touched"
+npm run -s typecheck || { echo "typecheck failed — nothing shipped" >&2; exit 1; }
+npm run -s test:core -- --reporter=dot || { echo "core suite failed — nothing shipped" >&2; exit 1; }
 
 # ------------------------------------------------------------------ the version
 CUR=$(node -p "require('./package.json').version")
@@ -152,8 +232,20 @@ if ! git diff --quiet -- package.json app/app.json package-lock.json; then
   echo "==> committed the bump"
 fi
 
-# ------------------------------------------------------------------- the deploy
-sh tools/deploy-device.sh $UDID
+# ------------------------------------------------------------------ the desktop
+# The Mac Catalyst bundle, BEFORE the tag — the suite's safety order: a broken
+# desktop build leaves the version untagged, so a re-run reuses it, exactly as
+# a failed deploy does in the repos that have one. This is the build a release
+# must prove; it is also the closest thing MyCalMind has to a deploy, since
+# the web has none and the phone is out of the lane on purpose.
+if [ "$WANT_MAC" = 1 ]; then
+  if ! sh tools/build-platforms.sh --mac; then
+    echo "" >&2
+    echo "THE MAC CATALYST BUILD FAILED — so nothing was tagged." >&2
+    echo "  Fix it and re-run: the lane reuses ${NEW} (build ${NEWBUILD})." >&2
+    exit 1
+  fi
+fi
 
 # ----------------------------------------------------------------- tag and push
 git tag -a "$NEW" -m "MyCalMind $NEW"
@@ -167,8 +259,46 @@ git tag -a "$NEW" -m "MyCalMind $NEW"
 if ! git push --atomic --follow-tags origin main; then
   git tag -d "$NEW" >/dev/null
   echo "" >&2
-  echo "THE DEPLOY SHIPPED, but the push was rejected — so nothing was tagged." >&2
-  echo "  main has moved on the remote. Pull, then re-run: the lane reuses ${NEW}." >&2
+  echo "THE MAC BUNDLE IS BUILT AND INSTALLED, but the push was rejected — so" >&2
+  echo "  nothing was tagged. main has moved on the remote. Pull, then re-run:" >&2
+  echo "  the lane reuses ${NEW}." >&2
   exit 1
 fi
-echo "==> dtp done: $NEW (build $NEWBUILD) is on the phone and pushed"
+echo "==> pushed, tagged $NEW"
+
+# ------------------------------------------------------------- the device builds
+# After the push, and NOT fatal. The release is done by here — the tag is on
+# the remote, the Mac bundle is in /Applications — so an emulator that will
+# not boot, or an iOS toolchain hiccup, is a thing to be told about, not a
+# failed release to unpick.
+#
+# One at a time, never in parallel: two heavy build/device processes at once
+# has caused real failures on this machine twice (AGENTS.md).
+DEVICE_FAILED=""
+if [ "$WANT_ANDROID" = 1 ]; then
+  sh tools/build-platforms.sh --android || DEVICE_FAILED="$DEVICE_FAILED --android"
+fi
+# The iOS run is a BUILD CHECK — it compiles Release (watch companion
+# included) and stops; nothing touches the phone (see the header).
+if [ "$WANT_IOS" = 1 ]; then
+  sh tools/build-platforms.sh --ios || DEVICE_FAILED="$DEVICE_FAILED --ios"
+fi
+if [ -n "$DEVICE_FAILED" ]; then
+  echo "" >&2
+  echo "$NEW IS TAGGED AND PUSHED. These platform builds did not finish:$DEVICE_FAILED" >&2
+  echo "  Re-run just those, once the machine is ready:" >&2
+  echo "    sh tools/build-platforms.sh$DEVICE_FAILED" >&2
+fi
+
+# The page is told how it ended, and with what severity: a live, tagged release
+# whose phone build did not run is not a failure, but it is not a clean 0 either.
+REPORT_DONE=1
+if [ -n "$RUN_ID" ]; then
+  if [ -n "$DEVICE_FAILED" ]; then
+    sh "$REPORTER" finish "$RUN_ID" ok 2 "$NEW live; device builds pending:$DEVICE_FAILED" >/dev/null 2>&1 || true
+  else
+    sh "$REPORTER" finish "$RUN_ID" ok 0 "$NEW live" >/dev/null 2>&1 || true
+  fi
+fi
+
+echo "==> dtp done: $NEW (build $NEWBUILD) is tagged and pushed"

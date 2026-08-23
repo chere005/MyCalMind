@@ -3,6 +3,10 @@
 CalMind with the server taken out — a CLONE of CalMind's `apps/app` and
 `packages/core`, not a rewrite. `README.md` is the map.
 
+The baseline for all of Sean's repos lives in ~/GIT/AgentSuite/AGENTS.md
+and is imported here; this file holds only what is true of THIS repo.
+@../AgentSuite/AGENTS.md
+
 Until 2026-08-22 this lived inside the CalMind repo as `CalMind-Local`; it was
 extracted — history preserved — into its own repo and renamed MyCalMind. The
 upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
@@ -40,21 +44,16 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   `dtp`/`tdtp`, before anything reaches a device — a failing gate stops the
   lane rather than shipping around it. There is no lint script in this repo;
   don't invent one.
-- **`dtp` = deploy, tag, push; `tdtp` = test, deploy, tag, push.** Sean,
-  2026-08-22 — two lanes, the `t` in front being the full test run, not the
-  tag. `npm run dtp` / `npm run tdtp` (tools/dtp.sh, tools/tdtp.sh). There is
+- **`npm run dtp` / `npm run tdtp`** (tools/dtp.sh, tools/tdtp.sh). There is
   no server and no web instance, so "deploy" is `tools/deploy-device.sh`: a
   Release build installed on the connected iPhone (the watch app installs
-  separately; the script prints the command). Either lane bumps the MINOR
-  version — x.y.0 → x.(y+1).0, as everywhere in the suite — in
+  separately; the script prints the command). The version bump lands in
   `package.json` + `app/app.json`, and RESTARTS `ios.buildNumber`/
   `android.versionCode` at 1: a dtp puts a build on the phone, and the build
-  number is how two installs are told apart (AcctMind's lesson). A failed
-  deploy stops the lane; a re-run reuses the still-untagged version and bumps
-  only the build number. (The old rule "CalMind-Local is not tagged" was
-  about sharing CalMind's tag namespace — in its own repo, its own bare `x.y.0`
-  tags are the point.)
-- **`main` is the branch.** Stage explicit paths — never `git add -A`.
+  number is how two installs are told apart (AcctMind's lesson). A re-run of
+  a failed deploy bumps only the build number. (The old rule "CalMind-Local
+  is not tagged" was about sharing CalMind's tag namespace — in its own repo,
+  its own bare `x.y.0` tags are the point.)
 
 ## Commands
 
