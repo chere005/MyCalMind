@@ -90,6 +90,12 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   jobs are triggered in one batch"), so a lane run inside `dtp all` reports
   nothing of its own. Run alone, it opens and closes its own card.
 
+- **The lane ends non-zero when a device build is owed.** The release still
+  shipped — live, tagged, status card closed `ok` severity 2 — but a run that
+  skipped a build for want of a phone must not hand back a clean 0, or "it all
+  worked" gets read off an exit status that never checked. CoreMind's batch
+  catches it and still ships every repo after this one.
+
 ## Commands
 
 ```sh
