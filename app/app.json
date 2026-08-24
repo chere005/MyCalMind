@@ -2,7 +2,7 @@
   "expo": {
     "name": "MyCalMind",
     "slug": "mycalmind",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -26,7 +26,7 @@
     },
     "android": {
       "package": "com.seancheren.calmindlocal",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#111111",
         "foregroundImage": "./assets/android-icon-foreground.png",
