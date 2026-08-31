@@ -15,5 +15,5 @@
     "dtp": "sh tools/dtp.sh",
     "tdtp": "sh tools/tdtp.sh"
   },
-  "version": "1.3.0"
+  "version": "1.4.0"
 }
