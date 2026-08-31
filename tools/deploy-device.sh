@@ -72,7 +72,11 @@ for dev in d.get('result', {}).get('devices', []):
         continue
     name = dev.get('deviceProperties', {}).get('name', '?')
     ios.append((udid, name))
-    if dev.get('connectionProperties', {}).get('tunnelState') in ('connected', 'available'):
+    # tunnelState: a paired phone that is merely idle lists as 'disconnected'
+    # until something warms the tunnel — treating that as unreachable skipped
+    # the iOS step of CalMind 1.17.0 with the phone sitting right there
+    # (2026-08-30). Only 'unavailable' is a genuinely absent device.
+    if dev.get('connectionProperties', {}).get('tunnelState') in ('connected', 'available', 'disconnected'):
         reachable.append((udid, name))
 if len(reachable) == 1:
     print('%s\t%s' % reachable[0])
@@ -83,7 +87,7 @@ else:
     if not ios:
         print('  (devicectl knows no iOS device at all)', file=sys.stderr)
     elif not reachable:
-        print('  (none of them is currently reachable — plug one in and unlock it)', file=sys.stderr)
+        print('  (devicectl reports each of them unavailable — plug one in and unlock it)', file=sys.stderr)
 PY
 )
   rm -f "$DEVJSON"
