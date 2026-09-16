@@ -66,11 +66,9 @@ type Store = {
   sharedPartnerLabel: string | null;
   sharedRecs: AnyRec[];
   sharedPut: (rec: AnyRec) => Promise<void>;
-  /** ChefMind's records, as CalMind's store exposes them. This edition has no
-   *  server and so no ChefMind space: always empty, and the write is a no-op —
-   *  the Notes screen is a clone and reads both. */
+  /** ChefMind's records, as CalMind's store exposes them (read-only there too).
+   *  This edition has no server and so no ChefMind space: always empty. */
   chefRecs: AnyRec[];
-  chefMutate: (fn: (engine: SyncEngine) => void) => void;
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -369,8 +367,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // Sharing needs a second account and a server to arbitrate between them, so
   // its one write is a no-op rather than state nobody sets.
   const sharedPut = useCallback(async (_rec: AnyRec) => {}, []);
-  // No ChefMind space without a server; see the Store type.
-  const chefMutate = useCallback((_fn: (engine: SyncEngine) => void) => {}, []);
 
   return (
     <Ctx.Provider
@@ -391,7 +387,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         sharedRecs: NO_SHARED,
         sharedPut,
         chefRecs: NO_CHEF,
-        chefMutate,
       }}
     >
       {children}
