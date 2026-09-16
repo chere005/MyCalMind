@@ -129,7 +129,7 @@ if [ "$WANT_MAC" = 1 ]; then
   if ! xcodebuild -workspace "$IOS_WS" -scheme "$SCHEME" -configuration Release \
       -destination "platform=macOS,variant=Mac Catalyst,arch=arm64" \
       -derivedDataPath "$DERIVED" ARCHS=arm64 \
-      -allowProvisioningUpdates build >"$LOG" 2>&1; then
+      -allowProvisioningUpdates -allowProvisioningDeviceRegistration build >"$LOG" 2>&1; then
     echo "the macOS (Mac Catalyst) build failed — last lines:" >&2
     tail -25 "$LOG" >&2; echo "full log: $LOG" >&2; exit 1
   fi

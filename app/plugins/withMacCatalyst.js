@@ -1,4 +1,4 @@
-const { withPodfile, withFinalizedMod, IOSConfig } = require('@expo/config-plugins');
+const { withPodfile, withFinalizedMod, withAppDelegate, IOSConfig } = require('@expo/config-plugins');
 const xcode = require('xcode');
 
 // Enables Mac Catalyst so `xcodebuild -destination 'platform=macOS,variant=Mac Catalyst'`
@@ -104,4 +104,55 @@ module.exports = function withMacCatalyst(config) {
   ]);
 
   return config;
+};
+
+/**
+ * 4. The Mac window is as wide as the content column plus a little
+ * background — CalMind's 480 — and only the height resizes. Sean,
+ * 2026-09-15: "fix the width of all macos apps in the mindsuite similar to
+ * calmind." The Tauri apps say it in tauri.conf.json (width/minWidth/
+ * maxWidth 480); a Catalyst app has no such file, so it is said to UIKit as
+ * each window scene connects. Injected into the GENERATED AppDelegate.swift
+ * for the same reason everything above is: prebuild --clean rewrites it.
+ *
+ * Catalyst draws an iPad interface at 77% ("Scaled to Match iPad", which is
+ * what this target builds as); a Mac-idiom interface at 1:1. The number is
+ * in points, so it is divided by that scale to come out 480 on screen
+ * either way — the idiom is read at runtime rather than assumed.
+ */
+const WINDOW_LOCK = `
+#if targetEnvironment(macCatalyst)
+    // Width locked to the content column (480 on screen), height free —
+    // see plugins/withMacCatalyst.js, which writes this block.
+    let lockWidth: (UIScene) -> Void = { scene in
+      guard let scene = scene as? UIWindowScene else { return }
+      let scale: CGFloat = UIDevice.current.userInterfaceIdiom == .mac ? 1 : 0.77
+      scene.sizeRestrictions?.minimumSize = CGSize(width: 480 / scale, height: 480 / scale)
+      scene.sizeRestrictions?.maximumSize = CGSize(width: 480 / scale, height: 10_000)
+    }
+    UIApplication.shared.connectedScenes.forEach(lockWidth)
+    NotificationCenter.default.addObserver(forName: UIScene.willConnectNotification, object: nil, queue: .main) { note in
+      if let scene = note.object as? UIScene { lockWidth(scene) }
+    }
+#endif
+`;
+
+const withCatalystWindowLock = (config) =>
+  withAppDelegate(config, (config) => {
+    const anchor = '    return super.application(application, didFinishLaunchingWithOptions: launchOptions)';
+    const before = config.modResults.contents;
+    if (!before.includes(anchor)) {
+      throw new Error(
+        'withMacCatalyst: did not find the didFinishLaunching return in the generated AppDelegate.swift — the Expo template changed, update this plugin.'
+      );
+    }
+    if (!before.includes('lockWidth')) {
+      config.modResults.contents = before.replace(anchor, WINDOW_LOCK + anchor);
+    }
+    return config;
+  });
+
+const inner = module.exports;
+module.exports = function withMacCatalystAndWindowLock(config) {
+  return withCatalystWindowLock(inner(config));
 };
