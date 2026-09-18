@@ -17,6 +17,7 @@ import {
   eventLine,
   monthGridFilled,
   monthLegend,
+  LONG_PRESS_MS,
   newId,
   prefsOf,
   reminderToggle,
@@ -40,7 +41,8 @@ import { Chevron } from '../components/Chevron';
 import { useSharedTick, useTickGrace } from '../components/tickgrace';
 import { EditExit } from '../components/EditExit';
 import { useToast } from '../components/Toast';
-import { CircleBtn, CollapseAllBtn, ConfirmDelete, Rule, Scroll, TOPBAR_CTRL, WebHitSlop } from '../ui';
+import { CircleBtn, ConfirmDelete, Rule, Scroll, WebHitSlop } from '../ui';
+import { useFolds } from '../folds';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -64,25 +66,13 @@ export function Calendar({ onNoteCreated }: { onNoteCreated?: (id: string) => vo
   const [ym, setYm] = useState((calDay ?? today).slice(0, 7));
   const [day, setDayState] = useState(calDay ?? today);
   const setDay = (d: string) => { calDay = d; setDayState(d); };
-  const [folded, setFolded] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    AsyncStorage.getItem('calmind.calFold')
-      .then((raw) => raw && setFolded(new Set(JSON.parse(raw))))
-      .catch(() => {});
-  }, []);
-  const toggleFold = (kind: string) => {
-    const next = new Set(folded);
-    if (next.has(kind)) next.delete(kind);
-    else next.add(kind);
-    setFolded(next);
-    // Swallowed deliberately, and this is the triage: what is lost when a
-    // fold write fails is which sections were collapsed, next launch. No
-    // user content, nothing unrecoverable, and an alert about a collapsed
-    // folder would be worse than the loss. The failures worth surfacing in
-    // this app are the ones that lose DATA or lie about state — see
-    // store.tsx's persistFailed and the shared-write reconcile.
-    AsyncStorage.setItem('calmind.calFold', JSON.stringify([...next])).catch(() => {});
-  };
+  // The suite's one fold hook: which keys are shut, remembered, and the hold
+  // that folds a whole level. It swallows a failed write deliberately — what
+  // is lost is which sections were collapsed, next launch, which is not worth
+  // an alert (see store.tsx's persistFailed for the failures that are).
+  const groupFolds = useFolds('calmind.calFold');
+  const folded = groupFolds.shut;
+  const toggleFold = groupFolds.toggle;
   // Remembered, like calWeekMode and calFold beside it — the suite keeps this
   // in localStorage as calShowDone and restores it on load. It was the one
   // toggle on this screen that did not persist, so switching tabs (which
@@ -203,12 +193,13 @@ export function Calendar({ onNoteCreated }: { onNoteCreated?: (id: string) => vo
     if (sharedItems.notes.length) keys.push('notes:@');
     return keys;
   }, [items, sharedItems, myReminders, theirReminders]);
-  const allCollapsed = groupKeys.length > 0 && groupKeys.every((k) => folded.has(k));
-  const collapseAllGroups = () => {
-    const next = allCollapsed ? new Set<string>() : new Set(groupKeys);
-    setFolded(next);
-    AsyncStorage.setItem('calmind.calFold', JSON.stringify([...next])).catch(() => {});
-  };
+  /**
+   * Hold a group head and every group on the day follows it — the gesture
+   * that replaced the collapse-all button. `wasOpen` is the state of the head
+   * that was HELD: hold an open one and the day closes, hold a closed one and
+   * it opens.
+   */
+  const foldAllGroups = (wasOpen: boolean) => groupFolds.foldAll(groupKeys, wasOpen);
 
   const calById = useMemo(() => new Map(recs.filter((r): r is Rec<'calendar'> => r.type === 'calendar').map((c) => [c.id, c.payload])), [recs]);
 
@@ -443,13 +434,14 @@ export function Calendar({ onNoteCreated }: { onNoteCreated?: (id: string) => vo
           same place rather than the bar having a hole on one tab. */}
       <TopBar
         title="Calendar"
-        controls={<CollapseAllBtn open={!allCollapsed} onPress={collapseAllGroups} />}
+
         copyMarkdown={() => viewMarkdown(dayLabel, [
           { name: 'Events', lines: items.events.map((e) => ({ text: e.payload.text, chip: e.payload.time ? timeRangeLabel(e.payload.time, e.payload.end, clock24) : null })) },
           { name: 'Reminders', lines: myReminders.map(({ rec: r }) => ({ text: r.payload.text, chip: r.payload.time ? timeLabel(r.payload.time, clock24) : null })) },
           { name: sharedPartner ? `Shared — ${sharedPartner}` : 'Shared', lines: theirReminders.map(({ rec: r }) => ({ text: r.payload.text, chip: r.payload.time ? timeLabel(r.payload.time, clock24) : null })) },
         ])}
-        completed={<CircleBtn testID="cal-completed" glyph="☑" label="Completed" size={TOPBAR_CTRL} active={showDone} onPress={() => setShowDone(!showDone)} />}
+        showCompleted={showDone}
+        onToggleCompleted={() => setShowDone(!showDone)}
         picker={<CalendarPick />}
       />
       {/* The date centred over the grid; ◉ jumps home to today. */}
@@ -596,7 +588,13 @@ export function Calendar({ onNoteCreated }: { onNoteCreated?: (id: string) => vo
           <Text testID="cal-day-title" style={s.panelTitle}>{dayLabel}</Text>
         </View>
         {items.events.length > 0 && (
-          <Pressable testID="dp-group-head" style={s.groupHead} onPress={() => toggleFold('events')}>
+          <Pressable
+            testID="dp-group-head"
+            style={s.groupHead}
+            onPress={() => toggleFold('events')}
+            onLongPress={() => foldAllGroups(!folded.has('events'))}
+            delayLongPress={LONG_PRESS_MS}
+          >
             <Chevron open={!folded.has('events')} />
             <Text style={s.groupTitle}>Events</Text>
           </Pressable>
@@ -631,7 +629,13 @@ export function Calendar({ onNoteCreated }: { onNoteCreated?: (id: string) => vo
           </View>
         ))}
         {sharedItems.events.length > 0 && (
-          <Pressable testID="dp-group-head" style={s.groupHead} onPress={() => toggleFold('events:@')}>
+          <Pressable
+            testID="dp-group-head"
+            style={s.groupHead}
+            onPress={() => toggleFold('events:@')}
+            onLongPress={() => foldAllGroups(!folded.has('events:@'))}
+            delayLongPress={LONG_PRESS_MS}
+          >
             <Chevron open={!folded.has('events:@')} />
             <Text style={[s.groupTitle, s.groupTitleShared]}>{sharedPartnerLabel}'s events</Text>
           </Pressable>
@@ -644,7 +648,13 @@ export function Calendar({ onNoteCreated }: { onNoteCreated?: (id: string) => vo
           </View>
         ))}
         {myReminders.length > 0 && (
-          <Pressable testID="dp-group-head" style={s.groupHead} onPress={() => toggleFold('reminders')}>
+          <Pressable
+            testID="dp-group-head"
+            style={s.groupHead}
+            onPress={() => toggleFold('reminders')}
+            onLongPress={() => foldAllGroups(!folded.has('reminders'))}
+            delayLongPress={LONG_PRESS_MS}
+          >
             <Chevron open={!folded.has('reminders')} />
             <Text style={s.groupTitle}>Reminders</Text>
           </Pressable>
@@ -687,7 +697,13 @@ export function Calendar({ onNoteCreated }: { onNoteCreated?: (id: string) => vo
           </View>
         ))}
         {theirReminders.length > 0 && (
-          <Pressable testID="dp-group-head" style={s.groupHead} onPress={() => toggleFold('reminders:@')}>
+          <Pressable
+            testID="dp-group-head"
+            style={s.groupHead}
+            onPress={() => toggleFold('reminders:@')}
+            onLongPress={() => foldAllGroups(!folded.has('reminders:@'))}
+            delayLongPress={LONG_PRESS_MS}
+          >
             <Chevron open={!folded.has('reminders:@')} />
             <Text style={[s.groupTitle, s.groupTitleShared]}>{sharedPartnerLabel}'s reminders</Text>
           </Pressable>
@@ -708,7 +724,13 @@ export function Calendar({ onNoteCreated }: { onNoteCreated?: (id: string) => vo
           </View>
         ))}
         {items.notes.length > 0 && (
-          <Pressable testID="dp-group-head" style={s.groupHead} onPress={() => toggleFold('notes')}>
+          <Pressable
+            testID="dp-group-head"
+            style={s.groupHead}
+            onPress={() => toggleFold('notes')}
+            onLongPress={() => foldAllGroups(!folded.has('notes'))}
+            delayLongPress={LONG_PRESS_MS}
+          >
             <Chevron open={!folded.has('notes')} />
             <Text style={s.groupTitle}>Notes</Text>
           </Pressable>
@@ -748,7 +770,13 @@ export function Calendar({ onNoteCreated }: { onNoteCreated?: (id: string) => vo
           </View>
         ))}
         {sharedItems.notes.length > 0 && (
-          <Pressable testID="dp-group-head" style={s.groupHead} onPress={() => toggleFold('notes:@')}>
+          <Pressable
+            testID="dp-group-head"
+            style={s.groupHead}
+            onPress={() => toggleFold('notes:@')}
+            onLongPress={() => foldAllGroups(!folded.has('notes:@'))}
+            delayLongPress={LONG_PRESS_MS}
+          >
             <Chevron open={!folded.has('notes:@')} />
             <Text style={[s.groupTitle, s.groupTitleShared]}>{sharedPartnerLabel}'s notes</Text>
           </Pressable>

@@ -21,6 +21,11 @@ export * from './habit';
 export * from './undo';
 export * from './backup';
 export * from './search';
+// The fold rule and the day a recipe is planned for — both arrived with the
+// 2026-09-18 copy-down and neither is a canon FILE, so they are listed here by
+// hand, as CalMind's barrel lists them.
+export * from './folds';
+export * from './chefdate';
 // Local-only, no twin in the parent core: which URLs the recipe importer will
 // fetch, now that there is no server to do the fetching behind its own guard.
 export * from './fetchguard';
