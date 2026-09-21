@@ -64,9 +64,9 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   burning a number — then Android on the emulator and the iOS build check
   AFTER the push, reported rather than fatal, because by then the release has
   already happened and an emulator that will not boot is not a failed one. iOS
-  is build-checked but NEVER installed: the phone install stays the explicit
-  `tools/deploy-device.sh`, because it spends one of the phone's 3
-  free-team slots. The bump RESTARTS `ios.buildNumber` at 1 and INCREMENTS
+  is built AND INSTALLED onto Sean's phone since 2026-09-21; it was
+  build-checked-but-never-installed before that, to leave a slot free under
+  a cap that no longer exists (see **iOS** below). The bump RESTARTS `ios.buildNumber` at 1 and INCREMENTS
   `android.versionCode` — they are different kinds of number: buildNumbers
   reset per marketing version, versionCode is one monotonic integer per
   device, ever (proven 2026-08-23: a reset shipped versionCode 1 against an
@@ -105,10 +105,10 @@ npm run typecheck      # tsc --noEmit over the app workspace, which pulls core i
 npm run dtp            # the release lane: gates, bump, platform builds, tag,
                        #   push — what it ships is in Standing rules (tools/dtp.sh)
 npm run tdtp           # the same lane, --full      (tools/tdtp.sh -> dtp.sh --full)
-npm run deploy:device  # NOT part of dtp/tdtp: the deliberate Release build and
-                       #   install onto the connected iPhone, which spends one of
-                       #   its 3 free-team slots. Run it only when MyCalMind
-                       #   should actually take one.
+npm run deploy:device  # NOT part of dtp/tdtp: a one-off Release build and
+                       #   install onto the connected iPhone. The lane does
+                       #   this too now (2026-09-21); this stays as the way
+                       #   to do it without shipping a release.
 npm run start          # Metro — but read the :8081 trap below before you look at it
 ```
 
@@ -198,12 +198,22 @@ wrong side.
 No server, no web instance — local-only, Bonjour peer-to-peer, and the
 device is the only copy of its data. As of 2026-08-23:
 
-- **iOS — build-checked every release, never installed.** The lane compiles
-  Release (watch companion included) and stops; nothing occupies a slot on
-  the phone, on purpose. Apple's free developer team caps one physical device
-  at 3 installed apps, and the phone's three are CalMind, ChefMind and
-  AcctMind; MyCalMind was freed from it on 2026-08-22 to make room for
-  ChefMind's reinstall. `tools/deploy-device.sh` (`npm run deploy:device`) is
+- **iOS — built and installed every release, onto Sean's phone.** The lane
+  compiles Release (watch companion included) and installs it, like every
+  other app in the suite.
+
+  IT DID NOT, UNTIL 2026-09-21, and the reason is worth keeping because it
+  expired rather than being wrong: Apple's FREE developer team caps one
+  physical device at 3 installed apps; the phone's three were CalMind,
+  ChefMind and AcctMind, and MyCalMind was freed from it on 2026-08-22 to
+  make room for ChefMind's reinstall. The team is PAID now — its
+  Xcode-managed profile carries `TimeToLive 365` where a personal team's
+  carries 7 — so there is nothing to ration, and Sean said so plainly: "no
+  more caps per phone". The tell that the rule had already drifted from
+  reality: the app was sitting on his phone at 1.8.0 the whole time this
+  file said it was never installed.
+
+  `tools/deploy-device.sh` (`npm run deploy:device`) is
   the deliberate install and is NOT part of `dtp`/`tdtp` — run it only when
   MyCalMind should actually take one of those slots.
 - **watchOS — builds, a real companion app.** The iOS build produces a
@@ -266,9 +276,8 @@ The platform builds run through this repo's own
 `tools/build-platforms.sh [--mac] [--ios] [--android]` (since 2026-08-23;
 CoreMind's `bin/build-platforms.sh` remains the table-driven fallback for a
 checkout that predates it). MyCalMind rides CoreMind's `dtp all`
-cascade like every app now — safely, because the lane never installs to a
-phone: iOS is build-checked only, and the install stayed a deliberate,
-explicit act.
+cascade like every app now, and since 2026-09-21 that cascade installs it
+to Sean's phone as well — the cap that kept it off one is gone.
 
 ## Traps that have cost real time here
 

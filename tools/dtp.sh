@@ -12,11 +12,16 @@
 #     a broken desktop build leaves the version untagged and a re-run reuses it
 #   · Android: built, installed and launched on the local emulator — AFTER
 #     the push, reported but never fatal
-#   · iOS: BUILD-CHECKED only, never installed — AFTER the push, non-fatal.
-#     The phone's free-team cap is 3 apps and Sean keeps MyCalMind off it
-#     deliberately; tools/deploy-device.sh is the explicit install path and
-#     is NOT part of this lane. (The watch companion builds inside the iOS
-#     bundle; installing it is likewise explicit.)
+#   · iOS: built AND INSTALLED onto Sean's phone — AFTER the push, non-fatal.
+#     It was build-checked-but-never-installed until 2026-09-21, and the
+#     whole reason was a cap that has since gone: Apple's free tier allowed
+#     3 apps on a device, CalMind/ChefMind/AcctMind held all three, and
+#     MyCalMind stayed off so as not to evict one. The team is PAID now
+#     (profile TimeToLive 365, where a personal team's is 7), Sean settled
+#     it — "no more caps per phone" — and the app was in fact already on his
+#     phone at 1.8.0 while this comment claimed it never got there.
+#     tools/deploy-device.sh remains as the explicit one-off path. (The
+#     watch companion rides inside the iOS bundle and installs with it.)
 # (The old rule "CalMind-Local is not tagged" was about sharing CalMind's tag
 # namespace; in its own repo, its own tags are the point.)
 #
@@ -60,11 +65,15 @@ for a in "$@"; do
     # web, so here it means: gates, bump, tag, push, build nothing.
     --web)     PICKED=1 ;;
     -*) echo "unknown flag: $a" >&2; exit 1 ;;
-    # The positional used to be a device UDID for the phone install. That
-    # install spends one of the phone's 3 free-team slots, so it is explicit
-    # now, never a release side effect (see the header).
-    *) echo "refusing: this lane no longer installs to the phone." >&2
-       echo "  For the deliberate install: sh tools/deploy-device.sh $a" >&2
+    # The positional used to be a device UDID for the phone install. The
+    # lane installs again as of 2026-09-21, but WHICH phones is a fact about
+    # the app and lives in tools/build-platforms.sh, not in an argument
+    # someone types at the release. A udid here is still refused, because a
+    # release aimed by hand at one handset is the shape that left Patricia
+    # on CalMind 1.11.0 while everyone else moved eighteen minors.
+    *) echo "refusing: a phone is not named on the release line." >&2
+       echo "  The phones this app installs to are in tools/build-platforms.sh." >&2
+       echo "  For a one-off onto one device:  IOS_DEVICE='Its Name' sh tools/build-platforms.sh --ios" >&2
        exit 1 ;;
   esac
 done
