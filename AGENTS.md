@@ -1,7 +1,8 @@
 # Working in MyCalMind
 
 CalMind with the server taken out — a CLONE of CalMind's `apps/app` and
-`packages/core`, not a rewrite. `README.md` is the map.
+`packages/core`, not a rewrite. `ARCHITECTURE.md` is the map (`README.md` is
+the short front door that links to it).
 
 The baseline for all of Sean's repos lives in ~/GIT/AgentSuite/AGENTS.md
 and is imported here; this file holds only what is true of THIS repo.
@@ -214,14 +215,14 @@ device is the only copy of its data. As of 2026-08-23:
   file said it was never installed.
 
   `tools/deploy-device.sh` (`npm run deploy:device`) is
-  the deliberate install and is NOT part of `dtp`/`tdtp` — run it only when
-  MyCalMind should actually take one of those slots.
+  the deliberate install and is NOT part of `dtp`/`tdtp` — it stays as the way
+  to put this build on a phone WITHOUT shipping a release.
 - **watchOS — builds, a real companion app.** The iOS build produces a
   working watch companion, `Watch/CalMindWatch.app` inside the bundle (the
   legacy `CalMindWatch` product name is kept on purpose — same
   on-device-data reasoning as the bundle id). It installs with
   `xcrun devicectl device install app --device <watch-udid>
-  …/Watch/CalMindWatch.app` (see "Running it" in `README.md`), proven
+  …/Watch/CalMindWatch.app` (see "Running it" in `ARCHITECTURE.md`), proven
   building 2026-08-22, but nothing is installed to a paired watch right now.
 - **macOS — a real Mac Catalyst app, installed at `/Applications/MyCalMind.app`.**
   Proven working 2026-08-22, after a long chase: `app/plugins/withMacCatalyst.js`

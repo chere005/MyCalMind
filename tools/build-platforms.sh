@@ -4,7 +4,7 @@
 # MyCalMind belongs on, and an Android build installed and launched on the
 # local emulator. The watch companion app builds inside the iOS bundle;
 # nothing here installs that — it is reported, and the watch install stays
-# the explicit devicectl line in README.md.
+# the explicit devicectl line in ARCHITECTURE.md.
 #
 #   sh tools/build-platforms.sh              all three
 #   sh tools/build-platforms.sh --mac        just the Mac Catalyst bundle
@@ -339,7 +339,7 @@ PY
   # The watch companion rides inside the iOS bundle, so it belongs to the
   # BUILD and not to any one install — reported once, out here, whatever the
   # phones did. Installing it onto a watch is still its own devicectl call
-  # (README.md, "Running it"); nothing in this lane does it.
+  # (ARCHITECTURE.md, "Running it"); nothing in this lane does it.
   WATCHAPP=$(ls -d "$BUNDLE"/Watch/*.app 2>/dev/null | head -1)
   [ -n "$WATCHAPP" ] && echo "    built (watch companion): $WATCHAPP"
 
