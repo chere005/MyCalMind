@@ -149,12 +149,80 @@ if [ "$WANT_MAC" = 1 ]; then
   MACAPP="$DERIVED/Build/Products/Release-maccatalyst/$SCHEME.app"
   [ -d "$MACAPP" ] || { echo "the build succeeded and produced no $SCHEME.app" >&2; exit 1; }
   echo "    built: $MACAPP"
+
+  # WAS IT OPEN? Sean, 2026-09-21: "make sure to reopen already opened apps in
+  # a dtp.. i was looking at an old acctmind". Replacing the bundle under a
+  # RUNNING app changes nothing he can see: macOS still has the old
+  # executable and the old JS bundle mapped into the process it started, so
+  # the window in front of him keeps showing the previous release for as long
+  # as he leaves it open. That is how he spent an afternoon reading a stale
+  # AcctMind while the very build he was waiting for was already live on the
+  # web, on his phone AND in /Applications. Copying over a live bundle is the
+  # other half of it — a half-replaced app bundle is its own kind of broken —
+  # so the app is asked to quit BEFORE the rm/cp and put back afterwards.
+  #
+  # MATCH ON THE BUNDLE PATH, NEVER THE APP NAME. The executable inside a
+  # bundle is not named after the bundle: AcctMind.app runs
+  # Contents/MacOS/acctmind-desktop, so `pgrep -x AcctMind` finds nothing and
+  # a feature written that way would silently do nothing for ever, which is
+  # indistinguishable from the bug it was meant to fix. The path is derived
+  # from $SCHEME — the same variable the install below uses — so the two
+  # cannot end up disagreeing about which app this is.
+  #
+  # NONE OF THIS MAY FAIL THE RELEASE. Every step here is best-effort: the
+  # release is the point, and a window that did not come back is a smaller
+  # problem than a lane that went red over one.
+  MACAPP_PROC="/Applications/$SCHEME.app/Contents/MacOS/"
+  WAS_RUNNING=0
+  if pgrep -f "$MACAPP_PROC" >/dev/null 2>&1; then
+    WAS_RUNNING=1
+    echo "    $SCHEME is running — quitting it so this release is what he sees"
+    # A REQUEST, not a kill, and it never escalates to one. This app's
+    # snapshot is the only copy of its data (AGENTS.md, "Ask what happens
+    # when a write fails"), so a release has no business destroying unsaved
+    # state to save itself a few seconds. If it will not go, say so and
+    # install anyway — a stale window beats a skipped deploy.
+    osascript -e "quit app \"$SCHEME\"" >/dev/null 2>&1 || true
+    QWAIT=0
+    while pgrep -f "$MACAPP_PROC" >/dev/null 2>&1; do
+      sleep 1
+      QWAIT=$((QWAIT + 1))
+      [ "$QWAIT" -lt 8 ] || {
+        echo "    WARNING: $SCHEME would not quit within 8s — installing over it anyway;" >&2
+        echo "      quit it yourself and reopen it, or you are still looking at the old build" >&2
+        break
+      }
+    done
+  fi
+
   # INSTALL IT. A build sitting in derivedData is not a deploy — it is the
   # thing nobody looks at while the app in /Applications goes stale.
   rm -rf "/Applications/$SCHEME.app"
   cp -R "$MACAPP" /Applications/ \
     || { echo "copying $SCHEME.app into /Applications failed" >&2; exit 1; }
   echo "    installed: /Applications/$SCHEME.app"
+
+  # AND GIVE HIM HIS WINDOW BACK — only if this run took it away. An app he
+  # had CLOSED stays closed: a release that conjures windows onto his desktop
+  # is its own annoyance, and the ask was to reopen "already opened apps",
+  # not to launch everything it ships.
+  if [ "$WAS_RUNNING" = 1 ]; then
+    # ONLY A PROCESS THAT ACTUALLY WENT CAN BE BROUGHT BACK. If it ignored the
+    # quit above it is still on screen running the PREVIOUS build, and `open`
+    # would simply raise that stale window and exit 0 — so the lane log would
+    # end on a cheerful "reopened" directly under its own warning, which is the
+    # same false all-clear this whole block exists to kill. Re-check here
+    # rather than trust the wait above: an app that took a second longer than
+    # the timeout has still gone, and still deserves its window back.
+    if pgrep -f "$MACAPP_PROC" >/dev/null 2>&1; then
+      echo "    WARNING: $SCHEME never quit, so what is on screen is STILL the" >&2
+      echo "      pre-release build — quit it and reopen it to see this one" >&2
+    elif open -a "/Applications/$SCHEME.app" >/dev/null 2>&1; then
+      echo "    reopened: $SCHEME — it was running before this release"
+    else
+      echo "    WARNING: could not reopen $SCHEME; the install itself is fine" >&2
+    fi
+  fi
 fi
 
 # --------------------------------------------------------------------- iOS
