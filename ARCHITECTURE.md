@@ -162,6 +162,9 @@ For the Mac, iOS and Android builds by hand, use the same script the release
 lane does — `sh tools/build-platforms.sh --mac` (Catalyst into `/Applications`),
 `--android` (emulator), `--ios` (the iOS build and its installs) — naming none
 of them means all three — and `--dry-run` to see the plan before anything runs.
+Their C, Objective-C and C++ compiles reuse Xcode's compile cache in
+`~/Library/Developer/Xcode/MindCAS/MyCalMind` (Swift's do not), so the first
+build after an Xcode, React Native or Expo upgrade is the slow one.
 
 `AGENTS.md` lists the rest of the commands, including how to run one core test
 file by name without losing the `TZ=America/Chicago` the fixtures need.

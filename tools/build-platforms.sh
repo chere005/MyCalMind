@@ -73,9 +73,119 @@ done
 # the same session. Large and untracked is a real cost; it has to be paid.
 BUILD_SCRATCH="$ROOT/$APPDIR/ios"
 
+# ------------------------------------------------------------ the compile cache
+# Xcode 26's compilation caching, for the C, Objective-C and C++ compiles —
+# which is nearly all of this app's build time: React Native's core and the
+# Expo modules build FROM SOURCE here (see the macOS block), ~1,230 objects
+# and ~640 explicit modules per build, twice per release, and every one of
+# them started from zero on every run before this.
+#
+# WHAT IT BUYS, measured on this script's real Catalyst step run twice in a
+# row on 2026-10-01: the first run (cold — it fills the store) spent 313 s in
+# xcodebuild, against 295 s uncached for 1.13.0; the second, after the same
+# clean prebuild, hit 1584 of 1584 cacheable tasks and spent 130 s. And it
+# installed the same app: all 1,229 objects disassembled identically to the
+# uncached 1.14.0 build's, the linked executables matched section for section
+# (byte for byte up to the code signature, LC_UUID included), and the
+# Info.plists, entitlements, bundle file list and main.jsbundle were
+# identical. The first lane after this, and the first after any Xcode, React
+# Native or Expo upgrade, is the cold one; the iOS step warms on the second.
+# The iOS step had not run with the cache when it landed, so its first lane is
+# its proof — and like any iOS failure, a failure there fails the step loudly
+# after the push; it cannot quietly ship a different build.
+#
+# WHAT IT REUSES, AND WHY THAT IS NOT A STALE BUILD. A compile is skipped only
+# when its cache key matches one already stored, and the key is a hash of the
+# full command line, the compiler, and the CONTENT of every file the
+# dependency scanner saw it read — never a timestamp. Proven on 2026-10-01
+# through xcodebuild itself (a scratch package): a header whose bytes changed
+# while its mtime was put back exactly missed for every compile that includes
+# it, and the new object carried the new value. A compile that fails is never
+# stored, so an error always reaches a real compile and fails the build: an
+# `#error` in a .mm failed it, and failed it again on the next run with the
+# cache warm. derived-mac and derived-platforms stay INSIDE app/ios on purpose,
+# so in a lane, where the macOS step's clean prebuild wipes both, the build
+# system itself still starts empty and nothing carries over by mtime; only the
+# content-keyed store survives.
+#
+# WHERE IT LIVES. Outside app/ios, because the clean prebuild below deletes
+# app/ios on every run, the store with it — which is exactly why the cache
+# Xcode keeps by default (derived-mac/CompilationCache.noindex) has never
+# held anything here. And on the internal disk, for the exFAT reason above:
+# never /Volumes/SPACE. MIND_XCODE_CAS moves it, for a proof in a scratch
+# directory; a lane never sets it.
+#
+# SWIFT IS LEFT OUT, deliberately. Swift's cache does not key on a macro
+# plugin's executable, and this app loads one: ExpoModulesCore compiles with
+# -load-plugin-executable …/ExpoModulesMacros-tool. Proven on 2026-10-01 with
+# this Xcode's swiftc and those flags, on a file using the real plugin's
+# @OptimizedFunction: with the plugin replaced by /usr/bin/false and every
+# .swift file untouched, the cached compile REPLAYED its old success, where
+# the same compile uncached failed on the broken plugin. An Expo upgrade that
+# changed the macros' expansion would ship the old expansion the same way. So
+# SWIFT_ENABLE_COMPILE_CACHE=NO, and Swift compiles as it always has.
+#
+# THE SIZE CAP, and why it is 4G and not more. Without one Xcode lets the
+# store have half the free disk, on a disk that has filled up under a build
+# here before (2026-08-21). The cap is read and enforced — proven: "8GB"
+# fails the build outright (Xcode cannot parse it), and a 1K cap made Xcode
+# report "cache size … larger than size limit" and prune. But pruning ROTATES
+# rather than trims: a store over the cap becomes the read-only upstream of a
+# fresh one (whose hits are copied across as they are used) and the store
+# before it is deleted, so the disk it takes peaks near TWICE what the cap
+# lets one store reach. The cold Catalyst build wrote 1.4 GB (2026-10-01); the
+# iOS build should write about as much, so a lane's working set is ~3 GB and
+# fits under 4G with room for the app's own changes, and a React Native or
+# Xcode upgrade (everything misses once) rotates it, peaking near 8–9 GB — an
+# 8G cap would have peaked past 11.
+XCODE_CAS="${MIND_XCODE_CAS:-$HOME/Library/Developer/Xcode/MindCAS}/MyCalMind"
+XCODE_CAS_LIMIT=4G
+
+# xcodebuild with the cache on. Command-line settings reach every target, the
+# Pods' included, and outrank anything a target sets for itself.
+xcodebuild_cached() {
+  mkdir -p "$XCODE_CAS"
+  xcodebuild "$@" COMPILATION_CACHE_ENABLE_CACHING=YES SWIFT_ENABLE_COMPILE_CACHE=NO \
+    "COMPILATION_CACHE_CAS_PATH=$XCODE_CAS" "COMPILATION_CACHE_LIMIT_SIZE=$XCODE_CAS_LIMIT" \
+    COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES
+}
+
+# Is app/ios a SOURCE-BUILD workspace — React Native's core and the Expo
+# modules compiled here — the one configuration the cache was proven on? A
+# PLAIN prebuild (tools/deploy-device.sh makes one on every run, and a
+# standalone --ios reuses whatever app/ios holds) pulls React Native's
+# prebuilt core instead: -ivfsoverlay React-VFS.yaml on every compile and
+# SWIFT_ENABLE_EXPLICIT_MODULES=NO on every project, a shape nobody has built
+# with the cache on. That workspace builds exactly as it did before the cache
+# existed. Two independent marks of it, either one enough to say no.
+source_build_workspace() {
+  [ -f "$ROOT/$APPDIR/ios/Podfile.lock" ] || return 1
+  [ -f "$ROOT/$APPDIR/ios/Pods/Pods.xcodeproj/project.pbxproj" ] || return 1
+  if grep -q 'React-Core-prebuilt' "$ROOT/$APPDIR/ios/Podfile.lock"; then return 1; fi
+  if grep -q 'SWIFT_ENABLE_EXPLICIT_MODULES = NO' "$ROOT/$APPDIR/ios/Pods/Pods.xcodeproj/project.pbxproj"; then return 1; fi
+  return 0
+}
+
+# The tally xcodebuild prints at the end of a cached build ("N hits / M
+# cacheable tasks"), and any compile clang could not cache. INFORMATION ONLY:
+# nothing in here may fail the build, so every count sits inside an echo or an
+# `if` and none is an assignment under set -e — grep -c exits 1 when it counts
+# 0, which is exactly what a clean log prints.
+cache_tally() {
+  if grep -q 'cacheable tasks' "$1" 2>/dev/null; then
+    echo "    compile cache: $(grep -h 'cacheable tasks' "$1" | tail -1 | sed 's/^note: //' || true)"
+  else
+    echo "    compile cache: xcodebuild printed no tally, so it may have cached nothing"
+  fi
+  if grep -qi 'not supported with implicit modules' "$1" 2>/dev/null; then
+    echo "      $(grep -ci 'not supported with implicit modules' "$1" || true) compiles were not cacheable (implicit modules)"
+  fi
+  return 0
+}
+
 if [ "$DRY" = 1 ]; then
-  [ "$WANT_MAC" = 1 ]     && echo "would: clean source-build prebuild (ios), patch-rndeps-catalyst.js, xcodebuild for 'platform=macOS,variant=Mac Catalyst,arch=arm64', install to /Applications"
-  [ "$WANT_IOS" = 1 ]     && echo "would: prebuild $APPDIR (ios), xcodebuild Release against the first of this app's phones devicectl reports, then devicectl install that one bundle onto each of them"
+  [ "$WANT_MAC" = 1 ]     && echo "would: clean source-build prebuild (ios), patch-rndeps-catalyst.js, xcodebuild for 'platform=macOS,variant=Mac Catalyst,arch=arm64' with the C/ObjC/C++ compile cache in $XCODE_CAS, install to /Applications"
+  [ "$WANT_IOS" = 1 ]     && echo "would: prebuild $APPDIR (ios), xcodebuild Release against the first of this app's phones devicectl reports (compile cache on only for a source-build workspace), then devicectl install that one bundle onto each of them"
   [ "$WANT_ANDROID" = 1 ] && echo "would: prebuild $APPDIR (android), gradlew assembleRelease, adb install"
   echo "      (each block under the heavy-build lock, tools/heavy-lock.sh — one heavy build on this machine at a time)"
   exit 0
@@ -154,17 +264,23 @@ if [ "$WANT_MAC" = 1 ]; then
     || { echo "could not patch ReactNativeDependencies' Catalyst bundle" >&2; exit 1; }
 
   LOG=$(mktemp -t mycalmind-mac)
+  # The compile cache (top of this file). The prebuild above is always a
+  # source build, so this is always the cached build; the check is the same
+  # one the iOS step makes, so the two cannot disagree about what was proven.
+  XCB=xcodebuild
+  if source_build_workspace; then XCB=xcodebuild_cached; fi
   # arm64-only: there is no x86_64 Catalyst slice anywhere upstream (see the
   # ExpoModulesCore note above), so an x86_64 attempt fails deterministically,
   # not intermittently. This machine is Apple Silicon; arm64-only is the
   # correct scope, not a workaround.
-  if ! xcodebuild -workspace "$IOS_WS" -scheme "$SCHEME" -configuration Release \
+  if ! $XCB -workspace "$IOS_WS" -scheme "$SCHEME" -configuration Release \
       -destination "platform=macOS,variant=Mac Catalyst,arch=arm64" \
       -derivedDataPath "$DERIVED" ARCHS=arm64 \
       -allowProvisioningUpdates -allowProvisioningDeviceRegistration build >"$LOG" 2>&1; then
     echo "the macOS (Mac Catalyst) build failed — last lines:" >&2
     tail -25 "$LOG" >&2; echo "full log: $LOG" >&2; exit 1
   fi
+  if [ "$XCB" = xcodebuild_cached ]; then cache_tally "$LOG"; fi
   rm -f "$LOG"
 
   MACAPP="$DERIVED/Build/Products/Release-maccatalyst/$SCHEME.app"
@@ -383,15 +499,26 @@ PY
   BUILD_UDID=$(printf '%s\n' $TARGETS | head -1)
   echo "    building against: $(phone_name "$BUILD_UDID") ($BUILD_UDID)"
   LOG=$(mktemp -t mycalmind-ios)
+  # The compile cache (top of this file) — on for the source-build workspace
+  # the lane's macOS step leaves behind, which is what a release builds here,
+  # and OFF for a workspace a plain prebuild made, which builds exactly as it
+  # did before the cache existed.
+  XCB=xcodebuild
+  if source_build_workspace; then
+    XCB=xcodebuild_cached
+  else
+    echo "    compile cache: off — app/ios was made by a plain prebuild (React Native's prebuilt core), which the cache was never proven on"
+  fi
   # -destination with a specific device, never -sdk: -sdk overrides SDKROOT
   # for every target in the scheme, so the watch complication compiles
   # against the iOS SDK and dies on code that is perfectly correct.
-  if ! xcodebuild -workspace "$IOS_WS" -scheme "$SCHEME" -configuration Release \
+  if ! $XCB -workspace "$IOS_WS" -scheme "$SCHEME" -configuration Release \
       -destination "platform=iOS,id=$BUILD_UDID" -derivedDataPath "$DERIVED" \
       -allowProvisioningUpdates -allowProvisioningDeviceRegistration build >"$LOG" 2>&1; then
     echo "the iOS build failed — last lines:" >&2
     tail -25 "$LOG" >&2; echo "full log: $LOG" >&2; exit 1
   fi
+  if [ "$XCB" = xcodebuild_cached ]; then cache_tally "$LOG"; fi
   rm -f "$LOG"
   BUNDLE="$DERIVED/Build/Products/Release-iphoneos/$SCHEME.app"
   [ -d "$BUNDLE" ] || { echo "the build succeeded and produced no $SCHEME.app" >&2; exit 1; }

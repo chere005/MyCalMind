@@ -268,6 +268,17 @@ device is the only copy of its data. As of 2026-08-23:
   be. The costs were accepted rather than overlooked — the app's Expo modules
   and React Native core always build from source (slower), and a
   CocoaPods-generated file is shell-patched on every run.
+  **Most of the "slower" is cached since 2026-10-01.** The C, Objective-C and
+  C++ compiles of the Catalyst AND the iOS build go through Xcode's compile
+  cache, a content-keyed store at `~/Library/Developer/Xcode/MindCAS/MyCalMind`
+  — outside `app/ios`, which every clean prebuild deletes, and capped at 4G.
+  A warm Catalyst build hit 1584 of 1584 cacheable tasks and spent 130 s in
+  xcodebuild instead of ~300, producing the same app (the proof and the disk
+  arithmetic are in `tools/build-platforms.sh`). Swift is deliberately not
+  cached (Traps, below), and a workspace a PLAIN prebuild made
+  (`tools/deploy-device.sh`) builds uncached, since nobody proved the cache on
+  React Native's prebuilt core. Deleting the store is always safe; it costs
+  one cold build.
 - **Android — builds, installs, and launches.** `com.seancheren.calmindlocal`,
   confirmed on the local emulator 2026-08-23 (1.2.0, versionCode 6).
 - **Web — none, deliberately.** No server means nothing to build a web
@@ -315,6 +326,15 @@ session, waits for it and prints whose it is every 30 s, and gives up after
 - **The simulator may be shared with a CalMind session.** Its app can take the
   foreground mid-test and swallow your taps and typing. Boot a second device
   rather than fighting for the first.
+- **Xcode's Swift compile cache does not see a macro plugin change.**
+  ExpoModulesCore loads `ExpoModulesMacros-tool` with
+  `-load-plugin-executable`, and the Swift cache key does not include that
+  binary: with it replaced by `/usr/bin/false`, a cached compile replayed its
+  old success where the uncached one failed (2026-10-01). An Expo upgrade that
+  changed what a macro expands to would ship the OLD expansion. That is why the
+  lane caches Clang only (`SWIFT_ENABLE_COMPILE_CACHE=NO`); turning Swift
+  caching on means proving that again first, not assuming a newer Xcode fixed
+  it.
 - **Ask what happens when a write fails.** The snapshot here is the ONLY copy —
   upstream it is a cache of what the server holds. A snapshot that will not
   parse is moved aside and reported, never treated as an empty store: empty and
