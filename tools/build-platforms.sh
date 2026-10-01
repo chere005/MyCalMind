@@ -74,25 +74,41 @@ done
 BUILD_SCRATCH="$ROOT/$APPDIR/ios"
 
 # ------------------------------------------------------------ the compile cache
-# Xcode 26's compilation caching, for the C, Objective-C and C++ compiles —
-# which is nearly all of this app's build time: React Native's core and the
-# Expo modules build FROM SOURCE here (see the macOS block), ~1,230 objects
-# and ~640 explicit modules per build, twice per release, and every one of
-# them started from zero on every run before this.
+# Xcode 26's compilation caching, for the C, Objective-C and C++ compiles of
+# the MAC CATALYST STEP, and of nothing else. Those compiles are nearly all of
+# that step's time: React Native's core and the Expo modules build FROM SOURCE
+# there (see the macOS block), ~1,230 objects and ~640 explicit modules, and
+# every one of them started from zero on every run before this.
 #
-# WHAT IT BUYS, measured on this script's real Catalyst step run twice in a
-# row on 2026-10-01: the first run (cold — it fills the store) spent 313 s in
-# xcodebuild, against 295 s uncached for 1.13.0; the second, after the same
-# clean prebuild, hit 1584 of 1584 cacheable tasks and spent 130 s. And it
-# installed the same app: all 1,229 objects disassembled identically to the
-# uncached 1.14.0 build's, the linked executables matched section for section
-# (byte for byte up to the code signature, LC_UUID included), and the
-# Info.plists, entitlements, bundle file list and main.jsbundle were
-# identical. The first lane after this, and the first after any Xcode, React
-# Native or Expo upgrade, is the cold one; the iOS step warms on the second.
-# The iOS step had not run with the cache when it landed, so its first lane is
-# its proof — and like any iOS failure, a failure there fails the step loudly
-# after the push; it cannot quietly ship a different build.
+# WHAT WAS PROVEN, and only this. On 2026-10-01 this script's real Catalyst
+# step ran twice in a row. The first run (cold — it fills the store) spent
+# 313 s in xcodebuild, against 295 s uncached for 1.13.0. The second, after the
+# same clean prebuild, hit 1584 of 1584 cacheable tasks and spent 130 s. Both
+# were compared with the uncached 1.14.0 Catalyst build: all 1,229 objects
+# disassembled identically (otool -tV); the linked executables matched
+# section for section, byte for byte up to the code signature (LC_UUID
+# included); and the Info.plists, entitlements, bundle file list and
+# main.jsbundle were identical. The two cached runs' objects were
+# byte-identical to each other, codesign --verify --deep --strict passed, and
+# the installed app launched. The first lane after this, and the first after
+# any Xcode, React Native or Expo upgrade, is the cold one.
+#
+# THE iOS STEP IS NOT CACHED. It stays plain xcodebuild until it has its own
+# equivalence proof. The Catalyst proof does not carry over to it: the iOS
+# build uses another SDK and destination and other targets (the watch app and
+# complication among them). And the cache changes how a compile runs, not
+# only how fast. The adversarial review of 2026-10-01 counted ~726 of the
+# pods' .cpp/.mm sources that move from implicit to explicit modules with it
+# on. So only a per-object comparison proves equivalence, never a build that
+# passes. A lane cannot be that proof either. After its build, the iOS step
+# checks only that a bundle exists and that devicectl takes it. A cached build
+# that compiled but produced different code would pass both checks and go
+# onto Sean's phone. The proof it needs is the Catalyst one, redone for iOS:
+# a scratch clone under the heavy-build lock; an uncached and a warm cached
+# `-destination generic/platform=iOS` build, with no install; then a per-object
+# `otool -tV` comparison, and a comparison of the bundle's binaries,
+# Info.plists, entitlements and main.jsbundle. Switch the iOS block to
+# xcodebuild_cached only after that passes, and record here what was compared.
 #
 # WHAT IT REUSES, AND WHY THAT IS NOT A STALE BUILD. A compile is skipped only
 # when its cache key matches one already stored, and the key is a hash of the
@@ -133,11 +149,12 @@ BUILD_SCRATCH="$ROOT/$APPDIR/ios"
 # rather than trims: a store over the cap becomes the read-only upstream of a
 # fresh one (whose hits are copied across as they are used) and the store
 # before it is deleted, so the disk it takes peaks near TWICE what the cap
-# lets one store reach. The cold Catalyst build wrote 1.4 GB (2026-10-01); the
-# iOS build should write about as much, so a lane's working set is ~3 GB and
-# fits under 4G with room for the app's own changes, and a React Native or
-# Xcode upgrade (everything misses once) rotates it, peaking near 8–9 GB — an
-# 8G cap would have peaked past 11.
+# lets one store reach. The cold Catalyst build wrote 1.4 GB (2026-10-01).
+# That is a lane's whole working set while the iOS step stays uncached. 4G
+# leaves room for the app's own changes, and for the iOS build's share
+# (expected to be about as much again) if its proof ever turns it on. A React
+# Native or Xcode upgrade (everything misses once) can push the store past the
+# cap and rotate it, peaking near 8–9 GB. An 8G cap would have peaked past 11.
 XCODE_CAS="${MIND_XCODE_CAS:-$HOME/Library/Developer/Xcode/MindCAS}/MyCalMind"
 XCODE_CAS_LIMIT=4G
 
@@ -150,14 +167,16 @@ xcodebuild_cached() {
     COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES
 }
 
-# Is app/ios a SOURCE-BUILD workspace — React Native's core and the Expo
-# modules compiled here — the one configuration the cache was proven on? A
-# PLAIN prebuild (tools/deploy-device.sh makes one on every run, and a
-# standalone --ios reuses whatever app/ios holds) pulls React Native's
-# prebuilt core instead: -ivfsoverlay React-VFS.yaml on every compile and
-# SWIFT_ENABLE_EXPLICIT_MODULES=NO on every project, a shape nobody has built
-# with the cache on. That workspace builds exactly as it did before the cache
-# existed. Two independent marks of it, either one enough to say no.
+# Is app/ios a SOURCE-BUILD workspace, with React Native's core and the Expo
+# modules compiled here? That is the shape the Catalyst proof was made on.
+# The Catalyst step's own clean prebuild always makes one, so there this says
+# yes. It is a guard: a prebuild that ever came out in the other shape builds
+# uncached, instead of cached on a shape nobody proved. The other shape is
+# what a PLAIN prebuild makes (tools/deploy-device.sh makes one on every run).
+# It pulls React Native's prebuilt core, with -ivfsoverlay React-VFS.yaml on
+# every compile and SWIFT_ENABLE_EXPLICIT_MODULES=NO on every project. Two
+# independent marks of it, either one enough to say no. The iOS step does not
+# ask: it never caches (top of this file).
 source_build_workspace() {
   [ -f "$ROOT/$APPDIR/ios/Podfile.lock" ] || return 1
   [ -f "$ROOT/$APPDIR/ios/Pods/Pods.xcodeproj/project.pbxproj" ] || return 1
@@ -185,9 +204,9 @@ cache_tally() {
 
 if [ "$DRY" = 1 ]; then
   [ "$WANT_MAC" = 1 ]     && echo "would: clean source-build prebuild (ios), patch-rndeps-catalyst.js, xcodebuild for 'platform=macOS,variant=Mac Catalyst,arch=arm64' with the C/ObjC/C++ compile cache in $XCODE_CAS, install to /Applications"
-  [ "$WANT_IOS" = 1 ]     && echo "would: prebuild $APPDIR (ios), xcodebuild Release against the first of this app's phones devicectl reports (compile cache on only for a source-build workspace), then devicectl install that one bundle onto each of them"
+  [ "$WANT_IOS" = 1 ]     && echo "would: prebuild $APPDIR (ios), xcodebuild Release (no compile cache — it is proven on the Catalyst build only) against the first of this app's phones devicectl reports, then devicectl install that one bundle onto each of them"
   [ "$WANT_ANDROID" = 1 ] && echo "would: prebuild $APPDIR (android), gradlew assembleRelease, adb install"
-  echo "      (each block under the heavy-build lock, tools/heavy-lock.sh — one heavy build on this machine at a time)"
+  echo "      (each block under the heavy-build lock, tools/heavy-lock.sh — it waits for any other build that takes the same lock; WriteMind's and WriteMindCross's builds do not)"
   exit 0
 fi
 
@@ -198,9 +217,13 @@ fi
 # AGENTS.md stated and nothing kept: on 2026-09-30 one session's gradle ran
 # beside another's xcodebuild, and an AcctMind lane that takes 246 s took
 # 1574 s. This repo is the worst offender it could have had — two
-# from-source React Native builds of ~5 minutes each — so a block here that
-# finds any other build running, this repo's or another app's, this
-# session's or another's, now waits for it and says whose it is.
+# from-source React Native builds of ~5 minutes each. A block here now waits
+# for another build that holds the lock and says whose it is. That build can
+# be this repo's or another app's, from this session or another. The lock sees
+# only scripts that source this helper: the suite apps' build-platforms.sh,
+# AcctMind's desktop smoke, this repo's deploy-device.sh and CoreMind's
+# fallback. WriteMind's and WriteMindCross's builds take no lock (2026-10-01),
+# so one of those can still run beside a block here.
 #
 # Taken around each WHOLE block, because a block is the unit the lane runs one
 # at a time (--mac before the tag, --android and --ios after the push), and
@@ -264,9 +287,10 @@ if [ "$WANT_MAC" = 1 ]; then
     || { echo "could not patch ReactNativeDependencies' Catalyst bundle" >&2; exit 1; }
 
   LOG=$(mktemp -t mycalmind-mac)
-  # The compile cache (top of this file). The prebuild above is always a
-  # source build, so this is always the cached build; the check is the same
-  # one the iOS step makes, so the two cannot disagree about what was proven.
+  # The compile cache (top of this file). This is the one step it was proven
+  # on. The prebuild above is always a source build, so this is always the
+  # cached build. The check stays as a guard, so the cache is only ever on for
+  # the workspace shape the proof was made on.
   XCB=xcodebuild
   if source_build_workspace; then XCB=xcodebuild_cached; fi
   # arm64-only: there is no x86_64 Catalyst slice anywhere upstream (see the
@@ -499,26 +523,21 @@ PY
   BUILD_UDID=$(printf '%s\n' $TARGETS | head -1)
   echo "    building against: $(phone_name "$BUILD_UDID") ($BUILD_UDID)"
   LOG=$(mktemp -t mycalmind-ios)
-  # The compile cache (top of this file) — on for the source-build workspace
-  # the lane's macOS step leaves behind, which is what a release builds here,
-  # and OFF for a workspace a plain prebuild made, which builds exactly as it
-  # did before the cache existed.
-  XCB=xcodebuild
-  if source_build_workspace; then
-    XCB=xcodebuild_cached
-  else
-    echo "    compile cache: off — app/ios was made by a plain prebuild (React Native's prebuilt core), which the cache was never proven on"
-  fi
+  # NO compile cache here, deliberately (top of this file). It is proven on
+  # the Catalyst build only. This bundle goes onto Sean's phones, and nothing
+  # after the build could tell a cached build that compiled differently from a
+  # correct one. So this stays plain xcodebuild, exactly as before the cache
+  # existed, until the iOS build has its own object-by-object proof.
+  #
   # -destination with a specific device, never -sdk: -sdk overrides SDKROOT
   # for every target in the scheme, so the watch complication compiles
   # against the iOS SDK and dies on code that is perfectly correct.
-  if ! $XCB -workspace "$IOS_WS" -scheme "$SCHEME" -configuration Release \
+  if ! xcodebuild -workspace "$IOS_WS" -scheme "$SCHEME" -configuration Release \
       -destination "platform=iOS,id=$BUILD_UDID" -derivedDataPath "$DERIVED" \
       -allowProvisioningUpdates -allowProvisioningDeviceRegistration build >"$LOG" 2>&1; then
     echo "the iOS build failed — last lines:" >&2
     tail -25 "$LOG" >&2; echo "full log: $LOG" >&2; exit 1
   fi
-  if [ "$XCB" = xcodebuild_cached ]; then cache_tally "$LOG"; fi
   rm -f "$LOG"
   BUNDLE="$DERIVED/Build/Products/Release-iphoneos/$SCHEME.app"
   [ -d "$BUNDLE" ] || { echo "the build succeeded and produced no $SCHEME.app" >&2; exit 1; }
