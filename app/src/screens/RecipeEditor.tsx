@@ -521,8 +521,6 @@ const s = themed(() => StyleSheet.create({
   rowText: { color: T.text, fontSize: 15, flexShrink: 1 },
   subhead: { fontWeight: '700', marginTop: 2 },
   ingLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  // The reminder row's date chip, verbatim — marginLeft auto is the right
-  // justification, the 999 radius is the pill.
   // The tap target is the whole line, not just the glyphs in it — a phone
   // gives you a thumb, not a cursor.
   rowPress: { flex: 1, paddingVertical: 2 },
@@ -539,5 +537,4 @@ const s = themed(() => StyleSheet.create({
   extraDropped: { textDecorationLine: 'line-through', opacity: 0.55 },
   extraLine: { color: T.muted, fontSize: 14, lineHeight: 20 },
   hint: { color: T.muted, fontSize: 12, lineHeight: 17, marginTop: 14 },
-  footRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 },
 }));

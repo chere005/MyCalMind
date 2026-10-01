@@ -48,7 +48,7 @@ three Expo modules that make up the native edge.
 | Gone | Because |
 |---|---|
 | `src/api.ts`, `src/config.ts` | the HTTP edge and the URL it pointed at |
-| `Login`, `signIn`/`signOut`, `src/passkey.ts` | there is no account to sign into |
+| `Login`, `signIn`/`signOut`, `src/passkey.ts`, `src/Logo.tsx` | there is no account to sign into (the Logo was the login screen's) |
 | `Requests`, `Request`, `core/meetreq.ts` | the public request page is a server endpoint |
 | `ShareModal`, the shared-partner reads | sharing needs two accounts and a server to arbitrate |
 | `QuickTick` | the widget's `?tick=` link is a URL on a server |

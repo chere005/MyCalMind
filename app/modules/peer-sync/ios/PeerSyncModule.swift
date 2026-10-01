@@ -66,10 +66,6 @@ public class PeerSyncModule: Module {
     Function("sendTo") { (peerId: String, json: String) in
       PeerLink.shared.send(json, to: peerId)
     }
-
-    Function("peers") { () -> [[String: String]] in
-      PeerLink.shared.peerList()
-    }
   }
 }
 
@@ -401,10 +397,6 @@ final class PeerLink {
         self.write(Frame(v: 1, kind: "records", device: self.deviceId, name: self.deviceName, payload: json), to: link)
       }
     }
-  }
-
-  func peerList() -> [[String: String]] {
-    q.sync { links.compactMap { (id, l) in l.peerId == nil ? nil : ["id": id, "name": l.peerName ?? id] } }
   }
 
   private func announcePeers() {

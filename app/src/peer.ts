@@ -21,7 +21,6 @@ type Native = {
   stop: () => void;
   send: (json: string) => void;
   sendTo: (peerId: string, json: string) => void;
-  peers: () => { id: string; name: string }[];
   addListener?: (event: string, cb: (payload: never) => void) => { remove(): void };
 };
 

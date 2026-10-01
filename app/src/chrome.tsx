@@ -103,8 +103,6 @@ export function TopBar({
       setMenuOpen(true);
     }
   };
-  // One rule, one place: the dot, Settings, the note editor and this border
-  // all read the same function.
   return (
     <>
       <View style={s.topbar}>
@@ -295,9 +293,6 @@ const s = themed(() => StyleSheet.create({
   // 8 between every button, Sean's number. It was 10 here with a further 4
   // either side of the picker, so the row had three different gaps in it.
   right: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
-  status: { width: 8, height: 8, borderRadius: 4 },
-  tip: { position: 'absolute', top: 14, right: 0, backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, zIndex: 40, minWidth: 150 },
-  tipText: { color: T.text, fontSize: 12 },
   // Prod's header controls: the picker sits in a dark ringed circle, the
   // username in a thin outlined pill — header nav .who, carried over.
   // One row, one scale — every control is TOPBAR_CTRL high, the suite's
@@ -315,20 +310,6 @@ const s = themed(() => StyleSheet.create({
   burgerLine: { height: 1.5, borderRadius: 1, backgroundColor: T.dim },
   whoBtnTrouble: { borderColor: T.danger },
   burgerLineTrouble: { backgroundColor: T.danger },
-  // Out of the flex flow entirely: the button is TOPBAR_CTRL square whether
-  // or not anything is waiting, so a request arriving mid-session cannot
-  // nudge the top bar. Overhangs the top-right corner, as a badge does.
-  whoBadge: {
-    position: 'absolute', top: -5, right: -6,
-    minWidth: 16, height: 16, borderRadius: 8,
-    paddingHorizontal: 4,
-    backgroundColor: T.overdue,
-    alignItems: 'center', justifyContent: 'center',
-    // A ring in the bar's own colour, so the badge reads as ON the button
-    // rather than as a loose dot behind it.
-    borderWidth: 1.5, borderColor: T.bg,
-  },
-  whoBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   menuBackdrop: { flex: 1, backgroundColor: '#0007' },
   menu: {
     position: 'absolute',
@@ -358,8 +339,4 @@ const s = themed(() => StyleSheet.create({
   menuBox: { color: T.muted, fontSize: 15, width: 16 },
   menuBoxOn: { color: T.accent },
   menuText: { color: T.text, fontSize: 15 },
-  menuBadge: {
-    minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5,
-    backgroundColor: T.overdue, alignItems: 'center', justifyContent: 'center',
-  },
 }));
