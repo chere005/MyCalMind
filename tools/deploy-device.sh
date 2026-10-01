@@ -104,7 +104,7 @@ echo "==> device: $UDID${DEVNAME:+ ($DEVNAME)}"
 
 # ------------------------------------------------------------- one at a time
 # The prebuild (pod install), the build and the install run under the
-# machine-wide heavy-build lock, tools/heavy-lock.sh — the same one the lane's
+# suite's heavy-build lock, tools/heavy-lock.sh — the same one the lane's
 # tools/build-platforms.sh takes, so this one-off can never land on top of a
 # release's build, or another session's. The gates above are seconds of tsc
 # and vitest and stay outside it. Let go after the install; an `exit 1` on the
