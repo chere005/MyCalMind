@@ -268,17 +268,19 @@ device is the only copy of its data. As of 2026-08-23:
   be. The costs were accepted rather than overlooked — the app's Expo modules
   and React Native core always build from source (slower), and a
   CocoaPods-generated file is shell-patched on every run.
-  **Most of the "slower" is cached since 2026-10-01.** The C, Objective-C and
-  C++ compiles of the Catalyst AND the iOS build go through Xcode's compile
-  cache, a content-keyed store at `~/Library/Developer/Xcode/MindCAS/MyCalMind`
-  — outside `app/ios`, which every clean prebuild deletes, and capped at 4G.
-  A warm Catalyst build hit 1584 of 1584 cacheable tasks and spent 130 s in
-  xcodebuild instead of ~300, producing the same app (the proof and the disk
-  arithmetic are in `tools/build-platforms.sh`). Swift is deliberately not
-  cached (Traps, below), and a workspace a PLAIN prebuild made
-  (`tools/deploy-device.sh`) builds uncached, since nobody proved the cache on
-  React Native's prebuilt core. Deleting the store is always safe; it costs
-  one cold build.
+  **The Catalyst build's "slower" is cached since 2026-10-01.** Its C,
+  Objective-C and C++ compiles go through Xcode's compile cache. The cache is a
+  content-keyed store at `~/Library/Developer/Xcode/MindCAS/MyCalMind`, capped
+  at 4G and kept outside `app/ios`, which every clean prebuild deletes. A warm
+  Catalyst build hit 1584 of 1584 cacheable tasks and spent 130 s in xcodebuild
+  instead of ~300. It produced the same app, object for object (the proof and
+  the disk arithmetic are in `tools/build-platforms.sh`). **The iOS build is
+  NOT cached.** That proof was made on Catalyst only. After its build, the iOS
+  step checks only that a bundle exists and that devicectl takes it. Neither
+  check would catch a cached build that compiled but produced different code,
+  so the iOS step stays plain xcodebuild until it has its own object-by-object
+  proof. Swift is deliberately not cached (Traps, below). Deleting the store is
+  always safe; it costs one cold build.
 - **Android — builds, installs, and launches.** `com.seancheren.calmindlocal`,
   confirmed on the local emulator 2026-08-23 (1.2.0, versionCode 6).
 - **Web — none, deliberately.** No server means nothing to build a web
@@ -293,11 +295,21 @@ to Sean's phone as well — the cap that kept it off one is gone.
 
 Each of its blocks — and `tools/deploy-device.sh` from its prebuild to its
 install — runs under the machine-wide heavy-build lock, `tools/heavy-lock.sh`
-(canon from CoreMind, an exact row: sourced here, never edited here). "One
-heavy build at a time" stopped being a rule two sessions had to remember on
-2026-10-01: a block that finds another build running, from any repo or any
-session, waits for it and prints whose it is every 30 s, and gives up after
-30 minutes (`MIND_HEAVY_WAIT`) rather than building beside it.
+(canon from CoreMind, an exact row: sourced here, never edited here). On
+2026-10-01 "one heavy build at a time" stopped being a rule two sessions had to
+remember, but only among the builds that take the lock. A block that finds one
+of those running, from any session, waits for it. It prints whose it is every
+30 s and gives up after 30 minutes (`MIND_HEAVY_WAIT`) rather than building
+beside it. The lock sees only scripts that source `heavy-lock.sh`:
+- the suite apps' `tools/build-platforms.sh` (AcctMind, CalMind, ChefMind
+  and this repo)
+- AcctMind's `desktop/smoke.sh`
+- this repo's `tools/deploy-device.sh`
+- CoreMind's fallback, `bin/build-platforms.sh`
+
+PrivateApp's xcodebuilds (`tools/build.sh`, `tools/test.sh`) and
+PrivateAppCross's builds take no lock, so one of those can still run beside a
+build here. For them, one at a time is still a rule to remember.
 
 ## Traps that have cost real time here
 

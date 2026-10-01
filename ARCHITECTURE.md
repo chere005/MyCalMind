@@ -37,8 +37,11 @@ tools/          dtp.sh / tdtp.sh, the release lanes; build-platforms.sh, the
                 patch-rndeps-catalyst.js beside it (the Catalyst codesign
                 repair it cannot build without); deploy-device.sh, the
                 deliberate iPhone install, which is NOT part of a release;
-                and heavy-lock.sh, CoreMind's canon lock both of those take
-                so that only one heavy build runs on the machine at a time.
+                and heavy-lock.sh, CoreMind's canon lock both of those take.
+                It runs one heavy build at a time among the scripts that
+                take it: the suite apps' build-platforms.sh, AcctMind's
+                desktop smoke, deploy-device.sh and CoreMind's fallback.
+                PrivateApp's and PrivateAppCross's builds do not take it.
 ```
 
 `AGENTS.md` goes a layer deeper on the code itself — the core/app split, the
@@ -162,9 +165,11 @@ For the Mac, iOS and Android builds by hand, use the same script the release
 lane does — `sh tools/build-platforms.sh --mac` (Catalyst into `/Applications`),
 `--android` (emulator), `--ios` (the iOS build and its installs) — naming none
 of them means all three — and `--dry-run` to see the plan before anything runs.
-Their C, Objective-C and C++ compiles reuse Xcode's compile cache in
-`~/Library/Developer/Xcode/MindCAS/MyCalMind` (Swift's do not), so the first
-build after an Xcode, React Native or Expo upgrade is the slow one.
+The Catalyst build's C, Objective-C and C++ compiles reuse Xcode's compile cache
+in `~/Library/Developer/Xcode/MindCAS/MyCalMind` (Swift's do not). So the first
+`--mac` after an Xcode, React Native or Expo upgrade is the slow one. The iOS
+build is not cached. It needs its own object-by-object proof that the cache
+changes nothing in it first.
 
 `AGENTS.md` lists the rest of the commands, including how to run one core test
 file by name without losing the `TZ=America/Chicago` the fixtures need.
