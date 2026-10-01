@@ -135,7 +135,7 @@ the Catalyst config plugin and its arm64-only limit, the
 
 ```sh
 npm install
-npm run test:core                          # 634 tests
+npm run test:core                          # the whole vitest suite
 npm run typecheck
 cd app && LANG=en_US.UTF-8 npx expo prebuild --platform ios --clean
 ```

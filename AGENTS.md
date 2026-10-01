@@ -101,7 +101,7 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
 
 ```sh
 npm install            # once, at the ROOT — the workspaces are packages/* and app
-npm test               # = test:core, the whole vitest suite (634 tests)
+npm test               # = test:core, the whole vitest suite
 npm run typecheck      # tsc --noEmit over the app workspace, which pulls core in
 npm run dtp            # the release lane: gates, bump, platform builds, tag,
                        #   push — what it ships is in Standing rules (tools/dtp.sh)

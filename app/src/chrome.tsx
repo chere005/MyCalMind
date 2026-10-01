@@ -323,15 +323,9 @@ const s = themed(() => StyleSheet.create({
   },
   menuRow: { paddingHorizontal: 16, paddingVertical: 11 },
   /**
-   * The Requests row's label and count, side by side — an INNER view rather
-   * than flexDirection on menuRow itself.
-   *
-   * Putting it on menuRow re-laid-out all six rows: a Text that had been a
-   * block filling the row became a flex item as wide as its words, and
-   * menuanchor.spec went red at all three widths. That spec measures the "Log
-   * out" TEXT as its stand-in for the menu's right edge — so a change made
-   * for the badge moved the thing it measures. The menu was still anchored
-   * correctly; the proxy had shifted. Scoped here, no other row is touched.
+   * The Show completed row's box and label, side by side — an INNER view
+   * rather than flexDirection on menuRow itself, so every other row keeps
+   * its Text as a block filling the row.
    */
   menuRowInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // A fixed width, so the label starts in the same place whether the box is
