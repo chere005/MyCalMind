@@ -34,7 +34,7 @@ if [ "$DRY" = 1 ]; then
   echo "would: (cd app && LANG=en_US.UTF-8 npx expo prebuild --platform ios --clean)"
   echo "would: xcodebuild -workspace app/ios/*.xcworkspace -scheme <from workspace name>"
   echo "       -configuration Release -destination 'platform=iOS,id=<udid>'"
-  echo "       -derivedDataPath app/ios/derived-dtp -allowProvisioningUpdates build"
+  echo "       -derivedDataPath app/ios/derived-dtp -allowProvisioningUpdates -allowProvisioningDeviceRegistration build"
   echo "would: xcrun devicectl device install app --device <udid> <MyCalMind.app>"
   exit 0
 fi
@@ -119,7 +119,7 @@ echo "==> xcodebuild Release -> $DERIVED"
 LOG=$(mktemp -t mycalmind-build)
 if ! xcodebuild -workspace "$WS" -scheme "$SCHEME" -configuration Release \
     -destination "platform=iOS,id=$UDID" \
-    -derivedDataPath "$DERIVED" -allowProvisioningUpdates build >"$LOG" 2>&1; then
+    -derivedDataPath "$DERIVED" -allowProvisioningUpdates -allowProvisioningDeviceRegistration build >"$LOG" 2>&1; then
   echo "build failed — last lines:" >&2
   tail -25 "$LOG" >&2
   echo "full log: $LOG" >&2

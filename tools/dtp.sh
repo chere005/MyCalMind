@@ -42,7 +42,7 @@
 #   3. the Mac Catalyst bundle (tools/build-platforms.sh --mac) — BEFORE the
 #      tag. A failed desktop build stops everything: never tag around one.
 #   4. tag X.Y.0 (BARE — no v) (annotated); 5. git push --follow-tags
-#   6. the device builds — Android on the emulator, then the iOS build check
+#   6. the device builds — Android on the emulator, then the iOS build and install
 #      — AFTER the push and reported rather than fatal: the release has
 #      already happened, and an emulator that will not boot must not read as
 #      a failed one. ONE AT A TIME, never in parallel — two heavy builds at
@@ -292,7 +292,7 @@ fi
 # desktop build leaves the version untagged, so a re-run reuses it, exactly as
 # a failed deploy does in the repos that have one. This is the build a release
 # must prove; it is also the closest thing MyCalMind has to a deploy, since
-# the web has none and the phone is out of the lane on purpose.
+# the web has none.
 if [ "$WANT_MAC" = 1 ]; then
   if ! sh tools/build-platforms.sh --mac; then
     echo "" >&2
@@ -333,8 +333,6 @@ DEVICE_FAILED=""
 if [ "$WANT_ANDROID" = 1 ]; then
   sh tools/build-platforms.sh --android || DEVICE_FAILED="$DEVICE_FAILED --android"
 fi
-# The iOS run is a BUILD CHECK — it compiles Release (watch companion
-# included) and stops; nothing touches the phone (see the header).
 if [ "$WANT_IOS" = 1 ]; then
   sh tools/build-platforms.sh --ios || DEVICE_FAILED="$DEVICE_FAILED --ios"
 fi

@@ -62,7 +62,7 @@ upstream it clones is `~/GIT/CalMind` (github.com/chere005/CalMind).
   "all apps should have a deploy on their own mechanism inside their repo"):
   the Catalyst bundle into `/Applications` BEFORE the tag and FATAL — a broken
   desktop build leaves the version untagged, so a re-run reuses it rather than
-  burning a number — then Android on the emulator and the iOS build check
+  burning a number — then Android on the emulator and the iOS build and install
   AFTER the push, reported rather than fatal, because by then the release has
   already happened and an emulator that will not boot is not a failed one. iOS
   is built AND INSTALLED onto Sean's phone since 2026-09-21; it was
