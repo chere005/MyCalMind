@@ -77,8 +77,28 @@ if [ "$DRY" = 1 ]; then
   [ "$WANT_MAC" = 1 ]     && echo "would: clean source-build prebuild (ios), patch-rndeps-catalyst.js, xcodebuild for 'platform=macOS,variant=Mac Catalyst,arch=arm64', install to /Applications"
   [ "$WANT_IOS" = 1 ]     && echo "would: prebuild $APPDIR (ios), xcodebuild Release against the first of this app's phones devicectl reports, then devicectl install that one bundle onto each of them"
   [ "$WANT_ANDROID" = 1 ] && echo "would: prebuild $APPDIR (android), gradlew assembleRelease, adb install"
+  echo "      (each block under the heavy-build lock, tools/heavy-lock.sh — one heavy build on this machine at a time)"
   exit 0
 fi
+
+# ------------------------------------------------------------ one at a time
+# Every platform block below runs under the machine-wide heavy-build lock,
+# tools/heavy-lock.sh — canon from CoreMind, carried here byte for byte, so it
+# is sourced and never edited. "One heavy build at a time" was a rule every
+# AGENTS.md stated and nothing kept: on 2026-09-30 one session's gradle ran
+# beside another's xcodebuild, and an AcctMind lane that takes 246 s took
+# 1574 s. This repo is the worst offender it could have had — two
+# from-source React Native builds of ~5 minutes each — so a block here that
+# finds any other build running, this repo's or another app's, this
+# session's or another's, now waits for it and says whose it is.
+#
+# Taken around each WHOLE block, because a block is the unit the lane runs one
+# at a time (--mac before the tag, --android and --ios after the push), and
+# because each block's prebuild, pod install and device work are as heavy as
+# its compile. Let go explicitly at each block's end; every `exit 1` inside a
+# block lets go through the helper's EXIT trap, and a kill -9 through the next
+# waiter's takeover.
+. "$ROOT/tools/heavy-lock.sh"
 
 # --------------------------------------------------------------- the iOS project
 # Shared by the catalyst step AND the iOS step, both of which build out of
@@ -102,6 +122,7 @@ prebuild_ios() {
 # ------------------------------------------------------------------- macOS
 if [ "$WANT_MAC" = 1 ]; then
   echo "==> macOS (Mac Catalyst)"
+  heavy_lock "macOS (Mac Catalyst)" || exit 1
   # ALWAYS a clean prebuild here, even when app/ios already exists. Expo's
   # prebuilt XCFrameworks (ExpoModulesCore and friends) carry NO maccatalyst
   # slice at all in this SDK version — confirmed via ExpoModulesCore's own
@@ -223,11 +244,13 @@ if [ "$WANT_MAC" = 1 ]; then
       echo "    WARNING: could not reopen $SCHEME; the install itself is fine" >&2
     fi
   fi
+  heavy_unlock
 fi
 
 # --------------------------------------------------------------------- iOS
 if [ "$WANT_IOS" = 1 ]; then
   echo "==> iOS"
+  heavy_lock "iOS" || exit 1
 
   # THE PHONES THIS APP BELONGS ON. A release is not "install to the phone",
   # and it is not "install to every phone" either. Sean, 2026-09-21, after a
@@ -419,11 +442,13 @@ PY
     echo "no phone took $SCHEME.app — the build is at $BUNDLE" >&2
     exit 1
   }
+  heavy_unlock
 fi
 
 # ----------------------------------------------------------------- Android
 if [ "$WANT_ANDROID" = 1 ]; then
   echo "==> Android"
+  heavy_lock "Android" || exit 1
   export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
   export ANDROID_SDK_ROOT="$ANDROID_HOME"
   export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
@@ -496,4 +521,5 @@ if [ "$WANT_ANDROID" = 1 ]; then
   done
   [ "$RUNNING" = 1 ] || { echo "installed and launched but never showed up running" >&2; exit 1; }
   echo "    installed and running: $PKG on $SERIAL"
+  heavy_unlock
 fi

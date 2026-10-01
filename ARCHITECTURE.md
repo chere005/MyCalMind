@@ -35,8 +35,10 @@ spec/           The behaviour contract, copied so core's suite runs here.
 tools/          dtp.sh / tdtp.sh, the release lanes; build-platforms.sh, the
                 Mac Catalyst / iOS / Android builds a release ships, with
                 patch-rndeps-catalyst.js beside it (the Catalyst codesign
-                repair it cannot build without); and deploy-device.sh, the
-                deliberate iPhone install, which is NOT part of a release.
+                repair it cannot build without); deploy-device.sh, the
+                deliberate iPhone install, which is NOT part of a release;
+                and heavy-lock.sh, CoreMind's canon lock both of those take
+                so that only one heavy build runs on the machine at a time.
 ```
 
 `AGENTS.md` goes a layer deeper on the code itself — the core/app split, the

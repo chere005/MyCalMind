@@ -280,6 +280,14 @@ checkout that predates it). MyCalMind rides CoreMind's `dtp all`
 cascade like every app now, and since 2026-09-21 that cascade installs it
 to Sean's phone as well — the cap that kept it off one is gone.
 
+Each of its blocks — and `tools/deploy-device.sh` from its prebuild to its
+install — runs under the machine-wide heavy-build lock, `tools/heavy-lock.sh`
+(canon from CoreMind, an exact row: sourced here, never edited here). "One
+heavy build at a time" stopped being a rule two sessions had to remember on
+2026-10-01: a block that finds another build running, from any repo or any
+session, waits for it and prints whose it is every 30 s, and gives up after
+30 minutes (`MIND_HEAVY_WAIT`) rather than building beside it.
+
 ## Traps that have cost real time here
 
 - **A Debug build silently loads the OTHER app.** Metro serves on :8081, and

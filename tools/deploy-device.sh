@@ -31,6 +31,7 @@ done
 
 if [ "$DRY" = 1 ]; then
   echo "would: typecheck + core suite"
+  echo "would: take the heavy-build lock (tools/heavy-lock.sh) for the prebuild through the install"
   echo "would: (cd app && LANG=en_US.UTF-8 npx expo prebuild --platform ios --clean)"
   echo "would: xcodebuild -workspace app/ios/*.xcworkspace -scheme <from workspace name>"
   echo "       -configuration Release -destination 'platform=iOS,id=<udid>'"
@@ -101,6 +102,16 @@ PY
 fi
 echo "==> device: $UDID${DEVNAME:+ ($DEVNAME)}"
 
+# ------------------------------------------------------------- one at a time
+# The prebuild (pod install), the build and the install run under the
+# machine-wide heavy-build lock, tools/heavy-lock.sh — the same one the lane's
+# tools/build-platforms.sh takes, so this one-off can never land on top of a
+# release's build, or another session's. The gates above are seconds of tsc
+# and vitest and stay outside it. Let go after the install; an `exit 1` on the
+# way lets go through the helper's EXIT trap.
+. "$ROOT/tools/heavy-lock.sh"
+heavy_lock "deploy-device: prebuild, Release build, install" || exit 1
+
 # ----------------------------------------------------------------- the prebuild
 # --clean, because app/ios is disposable prebuild output and a stale project
 # is how a renamed app ships under its old name. LANG is not optional.
@@ -135,6 +146,7 @@ APP="$DERIVED/Build/Products/Release-iphoneos/$SCHEME.app"
 echo "==> install -> $UDID"
 xcrun devicectl device install app --device "$UDID" "$APP" \
   || { echo "the install failed — is the phone paired with this Mac?" >&2; exit 1; }
+heavy_unlock
 
 echo "==> installed $SCHEME.app on $UDID"
 WATCHAPP=$(ls -d "$APP"/Watch/*.app 2>/dev/null | head -1)
