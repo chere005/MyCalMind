@@ -21,6 +21,7 @@ import { themed, T } from '../theme';
 import { CircleBtn, ConfirmDelete, Field, Scroll, WebHitSlop } from '../ui';
 import { OCR_UNSUPPORTED, ocrImages, ocrSupported } from '../components/ocr';
 import { UnitBadge } from '../components/IngredientBadge';
+import { RichText } from '../components/RichText';
 import { fetchRecipeHtml } from '../recipefetch';
 import { useRowDrag } from '../components/rowdrag';
 import { useSwipeLeft } from '../components/swiperow';
@@ -376,7 +377,7 @@ export function RecipeEditor({ note, onClose, put }: {
                 {(() => {
                   // A subheader is its own kind of row: bold, no badge —
                   // ending a typed line with ':' is what makes one.
-                  if (isSubheader(ing)) return <Text style={[s.rowText, s.subhead]}>{ing}</Text>;
+                  if (isSubheader(ing)) return <RichText text={ing} style={[s.rowText, s.subhead]} />;
                   // The measure as a right-justified iconized badge — the
                   // treatment a parsed date gets on a reminder row, shared
                   // with the note's rendered body via UnitBadge so the two
@@ -385,7 +386,7 @@ export function RecipeEditor({ note, onClose, put }: {
                   const p = ingredientParts(ing);
                   return (
                     <View style={s.ingLine}>
-                      <Text style={s.rowText}>{p.name || ing}</Text>
+                      <RichText text={p.name || ing} style={s.rowText} />
                       {p.qty && <UnitBadge qty={p.qty} unit={p.unit} />}
                     </View>
                   );
@@ -437,7 +438,7 @@ export function RecipeEditor({ note, onClose, put }: {
               />
             ) : (
               <Pressable testID="step-row" style={s.rowPress} onPress={() => { if (!swipe.justSwiped()) startEdit('step', i, st); }}>
-                <Text style={[s.rowText, isSubheader(st) && s.subhead]}>{st}</Text>
+                <RichText text={st} style={[s.rowText, isSubheader(st) && s.subhead]} />
               </Pressable>
             )}
             {swipe.swiped === `step-${i}` && (
@@ -520,7 +521,7 @@ const s = themed(() => StyleSheet.create({
   stepNum: { color: T.gold, fontSize: 14, fontWeight: '700', width: 22, textAlign: 'right' },
   rowText: { color: T.text, fontSize: 15, flexShrink: 1 },
   subhead: { fontWeight: '700', marginTop: 2 },
-  ingLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ingLine: { flexDirection: 'row', alignItems: 'center' },
   // The tap target is the whole line, not just the glyphs in it — a phone
   // gives you a thumb, not a cursor.
   rowPress: { flex: 1, paddingVertical: 2 },
