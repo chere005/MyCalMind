@@ -206,7 +206,7 @@ if [ "$DRY" = 1 ]; then
   [ "$WANT_MAC" = 1 ]     && echo "would: clean source-build prebuild (ios), patch-rndeps-catalyst.js, xcodebuild for 'platform=macOS,variant=Mac Catalyst,arch=arm64' with the C/ObjC/C++ compile cache in $XCODE_CAS, install to /Applications"
   [ "$WANT_IOS" = 1 ]     && echo "would: prebuild $APPDIR (ios), xcodebuild Release (no compile cache — it is proven on the Catalyst build only) against the first of this app's phones devicectl reports, then devicectl install that one bundle onto each of them"
   [ "$WANT_ANDROID" = 1 ] && echo "would: prebuild $APPDIR (android), gradlew assembleRelease, adb install"
-  echo "      (each block under the heavy-build lock, tools/heavy-lock.sh — it waits for any other build that takes the same lock; PrivateApp's and PrivateAppCross's builds do not)"
+  echo "      (each block under the heavy-build lock, tools/heavy-lock.sh — it waits for any other build that takes the same lock; builds that do not source the lock do not)"
   exit 0
 fi
 
@@ -222,7 +222,7 @@ fi
 # be this repo's or another app's, from this session or another. The lock sees
 # only scripts that source this helper: the suite apps' build-platforms.sh,
 # AcctMind's desktop smoke, this repo's deploy-device.sh and CoreMind's
-# fallback. PrivateApp's and PrivateAppCross's builds take no lock (2026-10-01),
+# fallback. Builds that do not source the lock take no lock (2026-10-01),
 # so one of those can still run beside a block here.
 #
 # Taken around each WHOLE block, because a block is the unit the lane runs one

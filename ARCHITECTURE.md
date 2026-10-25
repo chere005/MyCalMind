@@ -41,7 +41,7 @@ tools/          dtp.sh / tdtp.sh, the release lanes; build-platforms.sh, the
                 It runs one heavy build at a time among the scripts that
                 take it: the suite apps' build-platforms.sh, AcctMind's
                 desktop smoke, deploy-device.sh and CoreMind's fallback.
-                PrivateApp's and PrivateAppCross's builds do not take it.
+                Builds that do not source the lock are not covered.
 ```
 
 `AGENTS.md` goes a layer deeper on the code itself — the core/app split, the

@@ -23,7 +23,7 @@ CalMind minus the server: a CLONE of CalMind's `apps/app` + `packages/core` (ups
 - **Persist immediately:** `app/src/store.tsx` `mutate(fn)` writes with no debounce (snapshot = only copy). A snapshot that won't parse is moved aside and reported, never treated as empty.
 - **Native modules are dumb pipes** (`peer-sync` carries opaque JSON; merge stays in core). JS loads them via `requireOptionalNativeModule` and no-ops when absent. Widget/complication read only the App Group container.
 - **Expo:** read https://docs.expo.dev/versions/v57.0.0/ before writing Expo code (`app/AGENTS.md`).
-- **`tools/heavy-lock.sh`** (CoreMind canon, exact row, never edited here) wraps each `build-platforms.sh` block and `deploy-device.sh` (waits, prints holder every 30 s, gives up after 30 min, `MIND_HEAVY_WAIT`). It sees only scripts sourcing it; PrivateApp (`tools/build.sh`, `tools/test.sh`) and PrivateAppCross builds take no lock, so serialize those by hand.
+- **`tools/heavy-lock.sh`** (CoreMind canon, exact row, never edited here) wraps each `build-platforms.sh` block and `deploy-device.sh` (waits, prints holder every 30 s, gives up after 30 min, `MIND_HEAVY_WAIT`). It sees only scripts sourcing it; another app's builds take no lock, so serialize those by hand.
 
 ## Commands
 
