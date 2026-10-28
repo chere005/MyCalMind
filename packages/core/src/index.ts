@@ -30,3 +30,4 @@ export * from './chefdate';
 // fetch, now that there is no server to do the fetching behind its own guard.
 export * from './fetchguard';
 
+export * from './dailylog';
